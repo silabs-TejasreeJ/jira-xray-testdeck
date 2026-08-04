@@ -114,9 +114,7 @@ def jira_settings(request):
         "DEFAULT_STACK_NAME": getattr(settings, "DEFAULT_STACK_NAME", "") or "",
         "DEFAULT_RELEASE_NAME": getattr(settings, "DEFAULT_RELEASE_NAME", "") or "",
         "DEFAULT_PLAN_KEY": settings.DEFAULT_PLAN_KEY,
-        "SITE_CREDIT_NAME": getattr(
-            settings, "SITE_CREDIT_NAME", "Teja Sree Jammulamadaka"
-        ),
+        "SITE_CREDIT_NAME": settings.SITE_CREDIT_NAME,
         "ACTIVE_TECHNOLOGY": tech,
         "ACTIVE_STACK_NAME": stack,
         "ACTIVE_RELEASE_NAME": release,

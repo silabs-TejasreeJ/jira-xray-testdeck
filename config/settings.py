@@ -177,7 +177,7 @@ DEFAULT_STACK_NAME = os.getenv("DEFAULT_STACK_NAME", "")
 DEFAULT_RELEASE_NAME = os.getenv("DEFAULT_RELEASE_NAME", "")
 DEFAULT_PLAN_KEY = os.getenv("DEFAULT_PLAN_KEY", "")
 # Footer credit (shown site-wide; not the Jira signed-in user)
-SITE_CREDIT_NAME = os.getenv("SITE_CREDIT_NAME", "Teja Sree Jammulamadaka")
+SITE_CREDIT_NAME = "Teja Sree Jammulamadaka"
 # Plan view uses a selected Test Execution for case status (not plan latestStatus)
 PLAN_STATUS_FROM_EXECUTION = os.getenv("PLAN_STATUS_FROM_EXECUTION", "true").lower() in {
     "1",
