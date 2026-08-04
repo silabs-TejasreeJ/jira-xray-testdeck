@@ -1,0 +1,63 @@
+{# HTML file(s) only — use Import Folder for directories. #}
+<div class="panel" id="htmlImportPanel"
+     data-execution="{{ execution_key }}"
+     data-technology="{{ technology }}">
+  <div class="panel-header">
+    <div>
+      <h2>Import HTML files</h2>
+      <div class="small muted">
+        Upload one or more pytest-html <code>.htm</code>/<code>.html</code> files.
+        Only <strong>PASS</strong> is posted; FAIL and already-PASS in Xray are left untouched.
+        For a whole directory, use the <strong>Import Folder</strong> tab.
+      </div>
+    </div>
+  </div>
+  <div class="panel-body">
+    {% if not execution_key and not executions %}
+      <div class="alert">Select a Test Execution (run) first to import HTML statuses.</div>
+    {% else %}
+      <div class="toolbar html-import-toolbar">
+        {% if not shared_execution_select %}
+          {% if executions %}
+            <label class="small muted" for="htmlExecutionSelect">Test Execution</label>
+            <select id="htmlExecutionSelect" class="zip-exec-select">
+              {% for run in executions %}
+                <option value="{{ run.key }}"
+                  {% if execution_key == run.key or selected_execution == run.key %}selected{% endif %}>
+                  {{ run.key }}{% if run.summary %} — {{ run.summary|truncatechars:60 }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          {% endif %}
+        {% endif %}
+        <label class="small muted" for="htmlUploadFiles">HTML files</label>
+        <input type="file" id="htmlUploadFiles" name="files"
+               accept=".htm,.html,.HTM,.HTML,text/html" multiple>
+        <button type="button" class="btn btn-primary" id="htmlPreviewBtn">Preview</button>
+        <button type="button" class="btn" id="htmlApplyBtn" disabled>Submit PASS</button>
+      </div>
+      <div id="htmlUploadHint" class="small muted" style="margin-bottom:10px;">
+        Multi-select files (Ctrl/Cmd+click) · Duplicate content removed · Later timestamp wins per case
+      </div>
+      <div id="htmlImportStatus" class="small muted" style="margin-bottom:8px;"></div>
+      <div id="htmlImportSummary" class="html-import-summary" hidden></div>
+      <div id="htmlImportPager" class="toolbar" style="margin-bottom:8px;" hidden></div>
+      <div class="table-wrap" id="htmlImportTableWrap" hidden>
+        <table class="data" id="htmlImportTable">
+          <thead>
+            <tr>
+              <th class="check-col"><input type="checkbox" id="htmlSelectAll" title="Select all matches"></th>
+              <th>test_src_map_id</th>
+              <th>Case</th>
+              <th>Current</th>
+              <th>From HTML</th>
+              <th>Title</th>
+            </tr>
+          </thead>
+          <tbody id="htmlImportBody"></tbody>
+        </table>
+      </div>
+      <div id="htmlImportUnmatched" class="small muted" style="margin-top:10px;"></div>
+    {% endif %}
+  </div>
+</div>

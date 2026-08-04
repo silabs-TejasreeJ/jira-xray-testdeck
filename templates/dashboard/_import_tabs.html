@@ -1,0 +1,50 @@
+<div class="import-tabs" id="importTabs">
+  <div class="import-tab-bar" role="tablist">
+    <button type="button" class="import-tab active" data-tab="export" role="tab" aria-selected="true">
+      Export Excel
+    </button>
+    <button type="button" class="import-tab" data-tab="html" role="tab" aria-selected="false">
+      Import HTML
+    </button>
+    <button type="button" class="import-tab" data-tab="folder" role="tab" aria-selected="false">
+      Import Folder
+    </button>
+    <button type="button" class="import-tab" data-tab="zip" role="tab" aria-selected="false">
+      Import ZIP
+    </button>
+    <button type="button" class="import-tab" data-tab="excel" role="tab" aria-selected="false">
+      Import Excel
+    </button>
+  </div>
+
+  <div class="import-tab-panel" data-tab-panel="export">
+    {% include "dashboard/_excel_export.html" with plan_key=plan_key execution_key=execution_key|default:selected_execution selected_execution=selected_execution %}
+  </div>
+
+  <div class="import-tab-panel" data-tab-panel="html" hidden>
+    {% include "dashboard/_html_import.html" with execution_key=execution_key technology=technology executions=executions selected_execution=selected_execution shared_execution_select=shared_execution_select %}
+  </div>
+
+  {% include "dashboard/_folder_import.html" with execution_key=execution_key technology=technology executions=executions selected_execution=selected_execution shared_execution_select=shared_execution_select %}
+
+  {# Shown after any import preview. Keep outside tab panels so it stays visible. #}
+  {% include "dashboard/_failure_triage.html" %}
+
+  {% include "dashboard/_zip_import.html" with executions=executions selected_execution=selected_execution technology=technology shared_execution_select=shared_execution_select %}
+  {% include "dashboard/_excel_import.html" with executions=executions selected_execution=selected_execution technology=technology shared_execution_select=shared_execution_select %}
+
+  <div id="applyProgress" class="export-progress" hidden>
+    <div class="export-progress-head">
+      <strong id="applyProgressTitle">Updating results…</strong>
+      <span class="small muted" id="applyProgressMeta"></span>
+    </div>
+    <div class="export-progress-track" aria-hidden="true">
+      <div class="export-progress-bar" id="applyProgressBar" style="width:0%"></div>
+    </div>
+    <div id="applyProgressStats" class="html-import-summary" hidden></div>
+    <div class="small muted" id="applyProgressDetail"></div>
+    <div class="export-progress-actions">
+      <button type="button" class="btn" id="applyProgressDismissBtn" hidden>Dismiss</button>
+    </div>
+  </div>
+</div>

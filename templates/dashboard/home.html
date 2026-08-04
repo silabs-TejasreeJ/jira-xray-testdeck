@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h1>Overview</h1>
+        <div class="small muted">
+          {% if plan %}
+            Plan <a href="{% url 'plan_detail' plan.key %}?technology={{ technology|urlencode }}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}">{{ plan.key }}</a>
+            {% if selected_execution %}
+              · Run <a href="{% url 'execution_detail' selected_execution %}?technology={{ technology|urlencode }}">{{ selected_execution }}</a>
+            {% endif %}
+            · Technology: <strong>{{ technology|default:"All" }}</strong>
+          {% endif %}
+        </div>
+      </div>
+      <div class="row">
+        <a class="btn btn-primary" href="{% url 'plan_home' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Open Plan View</a>
+        <a class="btn" href="{% url 'executions' %}?technology={{ technology|urlencode }}">Browse Executions</a>
+      </div>
+    </div>
+    <div class="panel-body">
+      {% if connection %}
+        <div class="alert {% if connection.ok %}alert-ok{% else %}alert-error{% endif %}">
+          {{ connection.message }}
+        </div>
+      {% endif %}
+
+      {% include "dashboard/_status_overview.html" with summary=summary summary_json=summary_json %}
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h2>WLAN + BLE / Coex shortcuts</h2>
+      <a class="btn" href="{% url 'plans' %}?q=Coex&technology={{ technology|urlencode }}">All Coex plans</a>
+    </div>
+    <div class="panel-body">
+      <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Key</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in coex_plans %}
+            <tr>
+              <td>Plan</td>
+              <td><a href="{% url 'plan_detail' item.key %}?technology={{ technology|urlencode }}">{{ item.key }}</a></td>
+              <td>{{ item.summary }}</td>
+            </tr>
+          {% endfor %}
+          {% for item in wlan_plans %}
+            <tr>
+              <td>Plan</td>
+              <td><a href="{% url 'plan_detail' item.key %}?technology={{ technology|urlencode }}">{{ item.key }}</a></td>
+              <td>{{ item.summary }}</td>
+            </tr>
+          {% endfor %}
+          {% for item in coex_executions %}
+            <tr>
+              <td>Execution</td>
+              <td><a href="{% url 'execution_detail' item.key %}?technology={{ technology|urlencode }}">{{ item.key }}</a></td>
+              <td>{{ item.summary }}</td>
+            </tr>
+          {% endfor %}
+          {% if not coex_plans and not wlan_plans and not coex_executions %}
+            <tr><td colspan="3" class="muted">No Coex/WLAN shortcuts found.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{# Column visibility menu for case tables (data-col on th/td). #}
+<div class="col-picker" data-col-picker data-storage-key="{{ storage_key|default:'testdeck_case_cols_v1' }}">
+  <button type="button" class="btn col-picker-toggle" aria-expanded="false" aria-haspopup="true">Columns</button>
+  <div class="col-picker-menu" hidden>
+    <div class="small muted col-picker-hint">Show / hide columns</div>
+    {% for col in columns %}
+      <label class="col-picker-item">
+        <input type="checkbox" data-col-toggle="{{ col.key }}" {% if col.default %}checked{% endif %}>
+        <span>{{ col.label }}</span>
+      </label>
+    {% endfor %}
+  </div>
+</div>

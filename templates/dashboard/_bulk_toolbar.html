@@ -1,0 +1,17 @@
+{# Shown only when cases are selected (toggled by syncBulkUi). #}
+<div class="bulk-bar" id="bulkBar" data-execution="{{ execution_key }}" hidden>
+  <span class="bulk-count" id="selectedCount">0 selected</span>
+  <select id="bulkStatus" class="bulk-status" title="Set status for selected">
+    <option value="">Status…</option>
+    {% for st in editable_statuses %}
+      <option value="{{ st }}">{{ st }}</option>
+    {% endfor %}
+  </select>
+  <button type="button" class="btn btn-primary btn-compact" id="bulkApplyStatus" disabled>Apply</button>
+  <span class="bulk-sep" aria-hidden="true"></span>
+  <input type="text" id="bulkAssignee" class="bulk-assignee" list="assigneeSuggestions"
+         placeholder="Assign…" autocomplete="off" title="Assign selected to a Jira user">
+  <datalist id="assigneeSuggestions"></datalist>
+  <button type="button" class="btn btn-compact" id="bulkApplyAssignee" disabled>Assign</button>
+  <button type="button" class="btn btn-compact" id="bulkClearSelection" title="Clear selection">Clear</button>
+</div>

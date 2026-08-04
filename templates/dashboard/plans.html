@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <h1>Test Plans</h1>
+      <form method="get" class="toolbar" style="margin:0;">
+        <input type="hidden" name="technology" value="{{ technology }}">
+        <input type="hidden" name="stack" value="{{ stack_name }}">
+        <input type="hidden" name="release" value="{{ release_name }}">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search plan key/summary (e.g. Coex)">
+        <button class="btn btn-primary" type="submit">Search</button>
+        <a class="btn" href="?q=Coex&technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Coex</a>
+        <a class="btn" href="?q=wlan&technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">WLAN</a>
+      </form>
+    </div>
+    <div class="panel-body">
+      <div class="alert">
+        Plans filtered by stack <strong>{{ stack_name|default:"all" }}</strong>
+        · release <strong>{{ release_name|default:"all" }}</strong>.
+        Technology (<strong>{{ technology|default:"all" }}</strong>) filters cases inside a plan.
+      </div>
+      {% if connection and not connection.ok %}
+        <div class="alert alert-error">{{ connection.message }}</div>
+      {% endif %}
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>Summary</th>
+            <th>Stack</th>
+            <th>Release</th>
+            <th>Status</th>
+            <th>Assignee</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in plans %}
+            <tr>
+              <td>
+                <a href="{% url 'plan_detail' item.key %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">{{ item.key }}</a>
+              </td>
+              <td>
+                <a href="{% url 'plan_detail' item.key %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">{{ item.summary }}</a>
+              </td>
+              <td class="small">{{ item.stack_name|default:"—" }}</td>
+              <td class="small">{{ item.release_name|default:"—" }}</td>
+              <td>{{ item.status }}</td>
+              <td>{{ item.assignee|default:"—" }}</td>
+              <td class="small muted">{{ item.updated }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="muted">No test plans found for this stack/release.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

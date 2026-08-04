@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block sidebar %}
+  <h3>Repository</h3>
+  <a class="side-link active" href="{% url 'tests' %}">All tests</a>
+  <h3>Sections</h3>
+  <div class="tree">
+    {% include "dashboard/_section_tree.html" with nodes=sections section_path=section_path query_param="folder" filters=filters %}
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <h1>Test Repository</h1>
+      <form method="get" class="toolbar" style="margin:0;">
+        <input type="text" name="folder" value="{{ folder }}" placeholder="Folder / label hint">
+        <input type="text" name="search" value="{{ search }}" placeholder="Search key/summary">
+        <button class="btn btn-primary" type="submit">Search</button>
+      </form>
+    </div>
+    <div class="panel-body">
+      <div class="small muted" style="margin-bottom:10px;">JQL: {{ jql }}</div>
+      <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Key</th>
+            <th>test_src_map_id</th>
+            <th>Summary</th>
+            <th>Priority</th>
+            <th>Assignee</th>
+            <th>Section</th>
+            <th>Labels</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for test in tests %}
+            <tr>
+              <td class="nowrap"><a href="{{ test.url }}" target="_blank" rel="noopener">{{ test.key }}</a></td>
+              <td class="nowrap">{{ test.test_src_map_id|default:"" }}</td>
+              <td>{{ test.summary }}</td>
+              <td class="nowrap">{{ test.priority }}</td>
+              <td class="nowrap">{{ test.assignee|default:"" }}</td>
+              <td class="small section-cell">{{ test.section_path }}</td>
+              <td class="small">{{ test.labels|join:", " }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="muted">No tests found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

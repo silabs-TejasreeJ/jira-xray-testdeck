@@ -1,0 +1,26 @@
+{# Fragment response for ?partial=cases — swapped in by dashboard.js #}
+<div id="partial-payload">
+  <div id="partial-sidebar-tree">
+    {% if page == "plan" %}
+      {% include "dashboard/_sidebar_sections.html" with view_mode="plan" %}
+    {% else %}
+      {% include "dashboard/_sidebar_sections.html" with view_mode="execution" %}
+    {% endif %}
+  </div>
+  <div id="partial-cases-panel">
+    <div class="panel-header" id="casesPanelHeader">
+      <h2>
+        {{ section_name }}
+        <span class="chip" style="margin-left:8px;">{{ case_count }}</span>
+      </h2>
+    </div>
+    <div class="panel-body" id="casesPanelBody">
+      {% if page == "plan" %}
+        {% include "dashboard/_cases_panel_body.html" with view_mode="plan" empty_message="No cases for this plan/section/filter." %}
+      {% else %}
+        {% include "dashboard/_cases_panel_body.html" with view_mode="execution" empty_message="No cases in this section/filter." %}
+      {% endif %}
+    </div>
+  </div>
+  <script type="application/json" id="partial-overall-summary">{{ overall_summary_json|safe }}</script>
+</div>

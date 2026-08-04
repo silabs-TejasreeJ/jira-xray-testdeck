@@ -1,0 +1,85 @@
+{# Compact filter + case table. view_mode: "plan" | "execution" #}
+{% firstof selected_execution execution.key "" as execution_key %}
+
+<div class="cases-chrome sticky-toolbar">
+  <form method="get" class="cases-filter" id="casesFilterForm" data-partial-nav>
+    {% if section_path %}<input type="hidden" name="section" value="{{ section_path }}">{% endif %}
+    {% if view_mode == "plan" %}
+      <input type="hidden" name="execution" value="{{ execution_key }}">
+      <input type="hidden" name="stack" value="{{ stack_name }}">
+      <input type="hidden" name="release" value="{{ release_name }}">
+    {% endif %}
+    <input type="hidden" name="technology" value="{{ technology }}">
+
+    <select name="status" id="casesStatusFilter" class="cases-status" data-auto-submit title="Filter by status">
+      <option value="">All statuses</option>
+      <option value="PASS" {% if filters.status == "PASS" %}selected{% endif %}>PASS</option>
+      <option value="FAIL" {% if filters.status == "FAIL" %}selected{% endif %}>FAIL</option>
+      <option value="TODO" {% if filters.status == "TODO" %}selected{% endif %}>TODO</option>
+      <option value="BLOCKED" {% if filters.status == "BLOCKED" %}selected{% endif %}>BLOCKED</option>
+      <option value="EXECUTING" {% if filters.status == "EXECUTING" %}selected{% endif %}>EXECUTING</option>
+    </select>
+
+    <input type="search" name="search" id="casesSearchFilter" class="cases-search"
+           value="{{ filters.search }}" placeholder="Search key or title…"
+           autocomplete="off">
+
+    {% if filters.status or filters.search %}
+      <a class="btn btn-compact" href="?technology={{ technology|urlencode }}{% if view_mode == 'plan' %}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&execution={{ execution_key }}{% endif %}{% if section_path %}&section={{ section_path|urlencode }}{% endif %}"
+         data-partial-nav title="Clear status and search">Clear</a>
+    {% endif %}
+
+    {% if view_mode == "execution" %}
+      <a class="btn btn-compact" href="?technology={{ technology|urlencode }}&refresh=1{% if section_path %}&section={{ section_path|urlencode }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.search %}&search={{ filters.search|urlencode }}{% endif %}"
+         title="Reload from Jira/Xray">Refresh</a>
+    {% endif %}
+  </form>
+
+  <div class="cases-chrome-meta">
+    <div class="cases-pager-meta" data-partial-nav>
+      <span class="small muted">{{ pagination.showing_from }}–{{ pagination.showing_to }} of {{ case_count }}</span>
+      {% if pagination.total_pages > 1 %}
+        {% if pagination.page > 1 %}
+          <a class="btn btn-compact" href="?page={{ pagination.page|add:'-1' }}&technology={{ technology|urlencode }}{% if view_mode == 'plan' %}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&execution={{ execution_key }}{% endif %}{% if section_path %}&section={{ section_path|urlencode }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.search %}&search={{ filters.search|urlencode }}{% endif %}">Previous</a>
+        {% else %}
+          <button type="button" class="btn btn-compact" disabled>Previous</button>
+        {% endif %}
+        <span class="small muted">Page {{ pagination.page }} / {{ pagination.total_pages }}</span>
+        {% if pagination.page < pagination.total_pages %}
+          <a class="btn btn-compact" href="?page={{ pagination.page|add:'1' }}&technology={{ technology|urlencode }}{% if view_mode == 'plan' %}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&execution={{ execution_key }}{% endif %}{% if section_path %}&section={{ section_path|urlencode }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.search %}&search={{ filters.search|urlencode }}{% endif %}">Next</a>
+        {% else %}
+          <button type="button" class="btn btn-compact" disabled>Next</button>
+        {% endif %}
+      {% endif %}
+    </div>
+    {% if view_mode == "plan" %}
+      {% include "dashboard/_column_picker.html" with storage_key="testdeck_plan_cols_v2" columns=case_columns %}
+    {% else %}
+      {% include "dashboard/_column_picker.html" with storage_key="testdeck_exec_cols_v3" columns=case_columns %}
+    {% endif %}
+  </div>
+</div>
+
+{% include "dashboard/_bulk_toolbar.html" with execution_key=execution_key editable_statuses=editable_statuses %}
+
+<div class="table-wrap cases-table-wrap">
+  <table class="data case-table" id="{% if view_mode == 'plan' %}casesTable{% else %}caseTable{% endif %}" data-col-table>
+    <thead>
+      <tr>
+        <th class="check-col" data-col="check"><input type="checkbox" id="selectAllHeader" title="Select all on page"></th>
+        <th data-col="id">ID</th>
+        <th data-col="case_id">Case ID</th>
+        <th data-col="title">Title</th>
+        <th data-col="assignee">Assigned To</th>
+        <th data-col="priority" class="col-hidden">Priority</th>
+        <th data-col="status">Status</th>
+        <th data-col="defects">Linked Jira</th>
+        <th data-col="section" class="col-hidden">Section</th>
+        <th data-col="technology" class="col-hidden">Technology</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% include "dashboard/_case_rows.html" with execution_key=execution_key empty_message=empty_message %}
+    </tbody>
+  </table>
+</div>

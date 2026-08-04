@@ -1,0 +1,131 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <meta name="jira-base-url" content="{{ JIRA_BASE_URL }}">
+  <title>{% if title %}{{ title }} · {% endif %}TestDeck</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260803k">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js" defer></script>
+  <script src="{% static 'js/dashboard.js' %}?v=20260803m" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <span>TestDeck</span>
+        <span class="brand-badge">{{ JIRA_PROJECT_KEY }}</span>
+      </div>
+      <nav class="topnav">
+        <a href="{% url 'home' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'overview' %}active{% endif %}">Overview</a>
+        <a href="{% url 'plan_home' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'plan' %}active{% endif %}">Plan View</a>
+        <a href="{% url 'results_update' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'results_update' %}active{% endif %}">Results Update</a>
+        <a href="{% url 'executions' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'executions' or page == 'execution' %}active{% endif %}">Executions</a>
+        <a href="{% url 'plans' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'plans' %}active{% endif %}">Plans</a>
+        <a href="{% url 'tests' %}" class="{% if page == 'tests' %}active{% endif %}">Repository</a>
+        <a href="{% url 'coverage' %}" class="{% if page == 'coverage' %}active{% endif %}">Coverage</a>
+        <a href="{% url 'defects' %}" class="{% if page == 'defects' %}active{% endif %}">Defects</a>
+      </nav>
+      <div class="topmeta topmeta-auth">
+        {% if JIRA_CONFIGURED %}
+          <span style="opacity:.85;">Signed in as {{ JIRA_USERNAME_DISPLAY|default:JIRA_AUTHOR_DISPLAY }}</span>
+          <a href="{% url 'logout' %}" style="color:#fff; opacity:.95;">Logout</a>
+        {% else %}
+          <a href="{% url 'login' %}" style="color:#fff;">Sign in</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="sidebar">
+        {% block sidebar %}
+          <h3>Navigate</h3>
+          <a class="side-link {% if page == 'overview' %}active{% endif %}" href="{% url 'home' %}">Overview</a>
+          <a class="side-link {% if page == 'results_update' %}active{% endif %}" href="{% url 'results_update' %}">Results Update</a>
+          <a class="side-link {% if page == 'executions' or page == 'execution' %}active{% endif %}" href="{% url 'executions' %}">Test Executions</a>
+          <a class="side-link {% if page == 'plans' %}active{% endif %}" href="{% url 'plans' %}">Test Plans</a>
+          <a class="side-link {% if page == 'tests' %}active{% endif %}" href="{% url 'tests' %}">Test Repository</a>
+          <a class="side-link {% if page == 'coverage' %}active{% endif %}" href="{% url 'coverage' %}">Coverage</a>
+          <a class="side-link {% if page == 'defects' %}active{% endif %}" href="{% url 'defects' %}">Defects</a>
+        {% endblock %}
+      </aside>
+      <main class="content">
+        {% if error %}
+          <div class="alert alert-error">
+            <strong>Error:</strong> {{ error }}
+            {% if error_status %}<span class="muted">(HTTP {{ error_status }})</span>{% endif %}
+            {% if error_payload and error_payload.errorMessages %}
+              <div class="small" style="margin-top:6px;">
+                {% for msg in error_payload.errorMessages %}{{ msg }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+        {% if not JIRA_CONFIGURED %}
+          <div class="alert">
+            Copy <code>.env.example</code> to <code>.env</code> and set
+            <code>JIRA_USERNAME</code> / <code>JIRA_PASSWORD</code> for
+            <code>{{ JIRA_BASE_URL }}</code>.
+          </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+    <footer class="site-footer">
+      <span>{{ SITE_CREDIT_NAME }}</span>
+      <span class="muted">· TestDeck</span>
+    </footer>
+  </div>
+
+  <div id="toastHost" class="toast-host" aria-live="polite" aria-atomic="true"></div>
+
+  <div id="failDefectModal" class="modal-overlay" hidden>
+    <div class="modal-card modal-card-wide" role="dialog" aria-modal="true" aria-labelledby="failDefectTitle">
+      <div class="modal-header">
+        <h2 id="failDefectTitle">Update status</h2>
+        <button type="button" class="modal-close" id="failDefectCancelX" aria-label="Cancel">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="small muted" id="failDefectHint">
+          Fill execution details, then confirm. Jira defects are only for FAIL.
+        </p>
+
+        <div id="statusExecDetails" class="status-exec-details">
+          <div class="modal-label">Execution details</div>
+          <div id="statusExecFields" class="status-exec-fields">
+            <div class="small muted">Loading fields…</div>
+          </div>
+        </div>
+
+        <div id="failDefectSection" hidden>
+          <div class="modal-label" style="margin-top:14px;">Linked Jira (Execution Defects)</div>
+          <div id="failDefectSelected" class="defect-chip-list" hidden></div>
+          <div class="defect-picker-wrap">
+            <input
+              type="text"
+              id="failDefectKeys"
+              class="modal-input"
+              placeholder="Search or paste key (SI91X-12345)…"
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <div id="failDefectSuggest" class="defect-suggest" hidden></div>
+          </div>
+          <div class="small muted" style="margin-top:6px;">
+            Optional — only when marking FAIL. Paste keys / browse URLs or search.
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="failDefectCancelBtn">Cancel</button>
+        <button type="button" class="btn" id="failDefectSkipBtn" hidden>Fail without defect</button>
+        <button type="button" class="btn btn-primary" id="failDefectConfirmBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,91 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("login/", views.login_view, name="login"),
+    path("logout/", views.logout_view, name="logout"),
+    path("", views.home, name="home"),
+    path("executions/", views.executions, name="executions"),
+    path("executions/<str:key>/", views.execution_detail, name="execution_detail"),
+    path(
+        "executions/<str:key>/export.xlsx",
+        views.export_execution_xlsx,
+        name="export_execution_xlsx",
+    ),
+    path(
+        "executions/<str:key>/fail-jiras.xlsx",
+        views.export_fail_jira_summary_xlsx,
+        name="export_fail_jira_summary_xlsx",
+    ),
+    path("plans/", views.plans, name="plans"),
+    path("plan/", views.plan_home, name="plan_home"),
+    path("plans/<str:key>/", views.plan_detail, name="plan_detail"),
+    path(
+        "plans/<str:key>/export.xlsx",
+        views.export_plan_xlsx,
+        name="export_plan_xlsx",
+    ),
+    path(
+        "api/plans/<str:key>/export/",
+        views.api_plan_export_start,
+        name="api_plan_export_start",
+    ),
+    path(
+        "api/export-jobs/<str:job_id>/",
+        views.api_export_job_status,
+        name="api_export_job_status",
+    ),
+    path(
+        "api/export-jobs/<str:job_id>/download/",
+        views.api_export_job_download,
+        name="api_export_job_download",
+    ),
+    path(
+        "api/export-jobs/<str:job_id>/cancel/",
+        views.api_export_job_cancel,
+        name="api_export_job_cancel",
+    ),
+    path("results-update/", views.results_update, name="results_update"),
+    path("tests/", views.tests, name="tests"),
+    path("coverage/", views.coverage, name="coverage"),
+    path("defects/", views.defects, name="defects"),
+    path("api/health/", views.api_health, name="api_health"),
+    path("api/executions/<str:key>/", views.api_execution, name="api_execution"),
+    path(
+        "api/executions/<str:key>/summary/",
+        views.api_execution_summary,
+        name="api_execution_summary",
+    ),
+    path("api/plans/<str:key>/", views.api_plan, name="api_plan"),
+    path("api/testruns/<str:run_id>/status/", views.api_update_status, name="api_update_status"),
+    path("api/testruns/bulk-status/", views.api_bulk_update_status, name="api_bulk_update_status"),
+    path("api/testruns/<str:run_id>/defects/", views.api_add_defects, name="api_add_defects"),
+    path("api/testruns/bulk-defects/", views.api_bulk_add_defects, name="api_bulk_add_defects"),
+    path("api/issues/search/", views.api_issue_search, name="api_issue_search"),
+    path("api/testruns/<str:run_id>/assignee/", views.api_update_assignee, name="api_update_assignee"),
+    path("api/testruns/bulk-assignee/", views.api_bulk_update_assignee, name="api_bulk_update_assignee"),
+    path("api/users/search/", views.api_user_search, name="api_user_search"),
+    path("api/plans/resolve/", views.api_plan_resolve, name="api_plan_resolve"),
+    path("api/html-import/preview/", views.api_html_import_preview, name="api_html_import_preview"),
+    path("api/html-import/apply/", views.api_html_import_apply, name="api_html_import_apply"),
+    path("api/zip-import/preview/", views.api_zip_import_preview, name="api_zip_import_preview"),
+    path("api/zip-import/apply/", views.api_zip_import_apply, name="api_zip_import_apply"),
+    path("api/excel-import/preview/", views.api_excel_import_preview, name="api_excel_import_preview"),
+    path("api/excel-import/apply/", views.api_excel_import_apply, name="api_excel_import_apply"),
+    path(
+        "api/failure-triage/download/",
+        views.api_failure_triage_download,
+        name="api_failure_triage_download",
+    ),
+    path(
+        "api/apply-jobs/<str:job_id>/",
+        views.api_apply_job_status,
+        name="api_apply_job_status",
+    ),
+    path(
+        "api/results-update/fields/",
+        views.api_results_update_fields,
+        name="api_results_update_fields",
+    ),
+]

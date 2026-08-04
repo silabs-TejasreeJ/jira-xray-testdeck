@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <h1>Requirement / Section Coverage</h1>
+      {% if execution %}
+        <a class="btn" href="{% url 'execution_detail' execution.key %}">Back to {{ execution.key }}</a>
+      {% endif %}
+    </div>
+    <div class="panel-body">
+      {% if execution %}
+        <div class="alert">
+          Coverage for execution
+          <a href="{% url 'execution_detail' execution.key %}">{{ execution.key }}</a>
+          — grouped by top-level Test Repository section/feature.
+        </div>
+      {% endif %}
+
+      <div class="kpi-grid" style="margin-bottom:14px;">
+        <div class="kpi"><div class="label">Sections</div><div class="value">{{ coverage.total_sections }}</div></div>
+        <div class="kpi"><div class="label">Tests</div><div class="value">{{ coverage.total_tests }}</div></div>
+      </div>
+
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Section</th>
+            <th>Total</th>
+            <th>Executed</th>
+            <th>Passed</th>
+            <th>Failed</th>
+            <th>TODO</th>
+            <th>Coverage %</th>
+            <th>Pass %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in coverage.rows %}
+            <tr>
+              <td>{{ row.section }}</td>
+              <td>{{ row.total }}</td>
+              <td>{{ row.executed }}</td>
+              <td>{{ row.passed }}</td>
+              <td>{{ row.failed }}</td>
+              <td>{{ row.todo }}</td>
+              <td><strong>{{ row.coverage_pct }}%</strong></td>
+              <td>{{ row.pass_pct }}%</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="muted">No coverage data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

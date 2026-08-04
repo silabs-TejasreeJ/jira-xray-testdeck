@@ -1,0 +1,13 @@
+{# Shared Technology filter — searchable via data-searchable. #}
+<select id="{{ select_id|default:'technology' }}" name="technology"
+        class="{{ select_class|default:'' }}"
+        data-searchable
+        data-placeholder="{{ placeholder|default:'All technologies' }}"
+        {% if onchange %}onchange="{{ onchange }}"{% endif %}
+        style="{{ select_style|default:'' }}">
+  <option value="">{% if not selected_technology %}selected{% endif %}>{{ placeholder|default:"All technologies" }}</option>
+  {% for opt in TECHNOLOGY_OPTIONS %}
+    <option value="{{ opt }}"
+      {% if selected_technology == opt %}selected{% endif %}>{{ opt }}</option>
+  {% endfor %}
+</select>

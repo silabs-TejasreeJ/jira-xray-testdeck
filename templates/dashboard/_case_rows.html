@@ -1,0 +1,65 @@
+{# Shared case table rows for Plan View / Execution. Expects: cases, editable_statuses, technology, JIRA_BASE_URL #}
+{# execution_key: selected run key for data-execution attributes #}
+{% for case in cases %}
+  <tr class="case-row" data-run-id="{{ case.run_id|default:'' }}" data-key="{{ case.key }}">
+    <td class="check-col" data-col="check">
+      <input type="checkbox" class="case-check"
+             {% if not case.run_id %}disabled{% endif %}
+             data-run-id="{{ case.run_id|default:'' }}"
+             data-key="{{ case.key }}"
+             data-execution="{{ execution_key }}">
+    </td>
+    <td class="nowrap" data-col="id">
+      <a href="{{ case.url }}" target="_blank" rel="noopener">{{ case.key }}</a>
+    </td>
+    <td class="nowrap small" data-col="case_id" title="{% if case.test_src_map_id %}map: {{ case.test_src_map_id }}{% endif %}">
+      {% if case.case_id %}{{ case.case_id }}{% elif case.test_src_map_id %}{{ case.test_src_map_id }}{% else %}—{% endif %}
+    </td>
+    <td data-col="title">{{ case.summary }}</td>
+    <td class="nowrap assignee-cell" data-col="assignee">
+      {% if case.run_id and execution_key %}
+        <input type="text" class="assignee-input"
+               value="{{ case.assignee|default:'' }}"
+               data-run-id="{{ case.run_id }}"
+               data-execution="{{ execution_key }}"
+               data-prev="{{ case.assignee|default:'' }}"
+               data-user-key="{{ case.assignee_key|default:'' }}"
+               list="assigneeSuggestions"
+               placeholder="Unassigned"
+               title="Xray Test Run assignee — type a name and press Enter">
+      {% else %}
+        {{ case.assignee|default:"—" }}
+      {% endif %}
+    </td>
+    <td class="small nowrap col-hidden" data-col="priority">{{ case.priority|default:"—" }}</td>
+    <td data-col="status">
+      {% if case.run_id and execution_key %}
+        <select class="status-select status-{{ case.status }}"
+                data-run-id="{{ case.run_id }}"
+                data-execution="{{ execution_key }}">
+          {% for st in editable_statuses %}
+            <option value="{{ st }}" {% if case.status == st %}selected{% endif %}>{{ st }}</option>
+          {% endfor %}
+        </select>
+      {% else %}
+        <span class="status-pill status-{{ case.status }}">{{ case.status }}</span>
+      {% endif %}
+    </td>
+    <td class="defects-cell" data-col="defects">
+      <div class="exec-defects" {% if case.run_id %}data-run-id="{{ case.run_id }}"{% endif %}>
+        <div class="exec-defects-links">
+          {% for d in case.defects %}
+            {% firstof d.key d.defectKey d as dkey %}
+            {% if dkey %}
+              <a href="{{ JIRA_BASE_URL }}/browse/{{ dkey }}" target="_blank" rel="noopener">{{ dkey }}</a>{% if not forloop.last %} {% endif %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </td>
+    <td class="small section-cell col-hidden" data-col="section">{{ case.section_path }}</td>
+    <td class="small nowrap col-hidden" data-col="technology">{{ case.technology|default:technology }}</td>
+  </tr>
+{% empty %}
+  <tr><td colspan="10" class="muted">{{ empty_message|default:"No cases for this section/filter." }}</td></tr>
+{% endfor %}

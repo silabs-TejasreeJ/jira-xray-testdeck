@@ -1,0 +1,75 @@
+{# TestRail-style status overview: pie + counts #}
+{% firstof selected_execution execution.key execution_key "" as exec_key %}
+<div class="testrail-summary" id="statusOverview">
+  <div class="testrail-pie">
+    <canvas id="{{ chart_id|default:'statusChart' }}" width="280" height="280"></canvas>
+    <script id="{{ data_id|default:'status-summary-data' }}" type="application/json">{{ summary_json|safe }}</script>
+  </div>
+
+  <div class="testrail-stats">
+    <div class="status-list" id="statusList">
+      {% for item in summary.chart %}
+        {% if enable_status_filters %}
+          <a class="status-row status-filter-link {% if filters.status == item.status %}active{% endif %}"
+             href="?status={{ item.status }}{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if stack_name %}&stack={{ stack_name|urlencode }}{% endif %}{% if release_name %}&release={{ release_name|urlencode }}{% endif %}{% if exec_key %}&execution={{ exec_key }}{% endif %}{% if section_path %}&section={{ section_path|urlencode }}{% endif %}"
+             data-partial-nav
+             data-status="{{ item.status }}">
+            <span class="swatch" style="background:{{ item.color }}"></span>
+            <span class="status-name">
+              {% if item.status == "PASS" %}Passed
+              {% elif item.status == "FAIL" %}Failed
+              {% elif item.status == "TODO" %}Untested
+              {% elif item.status == "BLOCKED" %}Blocked
+              {% elif item.status == "RETEST" %}Retest
+              {% elif item.status == "NA" %}Not Applicable
+              {% elif item.status == "EXECUTING" %}Executing
+              {% else %}{{ item.status|title }}
+              {% endif %}
+            </span>
+            <span class="status-count">{{ item.count }}</span>
+            <span class="status-pct">({{ item.pct }}%)</span>
+          </a>
+        {% else %}
+          <div class="status-row">
+            <span class="swatch" style="background:{{ item.color }}"></span>
+            <span class="status-name">
+              {% if item.status == "PASS" %}Passed
+              {% elif item.status == "FAIL" %}Failed
+              {% elif item.status == "TODO" %}Untested
+              {% elif item.status == "BLOCKED" %}Blocked
+              {% elif item.status == "RETEST" %}Retest
+              {% elif item.status == "NA" %}Not Applicable
+              {% elif item.status == "EXECUTING" %}Executing
+              {% else %}{{ item.status|title }}
+              {% endif %}
+            </span>
+            <span class="status-count">{{ item.count }}</span>
+            <span class="status-pct">({{ item.pct }}%)</span>
+          </div>
+        {% endif %}
+      {% empty %}
+        <div class="muted">No test results loaded.</div>
+      {% endfor %}
+    </div>
+
+    <div class="big-stat">
+      <div class="pct" id="statusPassPct">{{ summary.pass_pct }}% passed</div>
+      <div class="sub" id="statusTodoSub">
+        {{ summary.todo }} / {{ summary.total }} untested ({{ summary.todo_pct }}%)
+      </div>
+      <div class="stat-chips" id="statusChips">
+        {% if enable_status_filters %}
+          <a class="chip pass-chip status-filter-link" href="?status=PASS{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if stack_name %}&stack={{ stack_name|urlencode }}{% endif %}{% if release_name %}&release={{ release_name|urlencode }}{% endif %}{% if exec_key %}&execution={{ exec_key }}{% endif %}{% if section_path %}&section={{ section_path|urlencode }}{% endif %}" data-partial-nav> {{ summary.passed }} PASS</a>
+          <a class="chip fail-chip status-filter-link" href="?status=FAIL{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if stack_name %}&stack={{ stack_name|urlencode }}{% endif %}{% if release_name %}&release={{ release_name|urlencode }}{% endif %}{% if exec_key %}&execution={{ exec_key }}{% endif %}{% if section_path %}&section={{ section_path|urlencode }}{% endif %}" data-partial-nav> {{ summary.failed }} FAIL</a>
+          <a class="chip todo-chip status-filter-link" href="?status=TODO{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if stack_name %}&stack={{ stack_name|urlencode }}{% endif %}{% if release_name %}&release={{ release_name|urlencode }}{% endif %}{% if exec_key %}&execution={{ exec_key }}{% endif %}{% if section_path %}&section={{ section_path|urlencode }}{% endif %}" data-partial-nav> {{ summary.todo }} TODO</a>
+          <a class="chip status-filter-link" href="?{% if technology %}technology={{ technology|urlencode }}{% endif %}{% if stack_name %}&stack={{ stack_name|urlencode }}{% endif %}{% if release_name %}&release={{ release_name|urlencode }}{% endif %}{% if exec_key %}&execution={{ exec_key }}{% endif %}{% if section_path %}&section={{ section_path|urlencode }}{% endif %}" data-partial-nav> {{ summary.total }} total</a>
+        {% else %}
+          <span class="chip pass-chip">{{ summary.passed }} PASS</span>
+          <span class="chip fail-chip">{{ summary.failed }} FAIL</span>
+          <span class="chip todo-chip">{{ summary.todo }} TODO</span>
+          <span class="chip">{{ summary.total }} total</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>

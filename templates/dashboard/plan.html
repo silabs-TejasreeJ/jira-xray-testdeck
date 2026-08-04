@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block sidebar %}
+  <h3>Plan</h3>
+  <div class="side-meta">
+    <div class="small"><strong>{{ plan.key }}</strong></div>
+    <div class="small muted">{{ plan.summary|truncatechars:80 }}</div>
+    {% if selected_execution %}
+      <div class="small" style="margin-top:8px;">
+        Run<br>
+        <a href="{% url 'execution_detail' selected_execution %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">{{ selected_execution }}</a>
+      </div>
+    {% endif %}
+  </div>
+  <a class="side-link" href="{% url 'plan_home' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&plan={{ plan.key }}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}">Change plan / run</a>
+  <a class="side-link" href="{{ plan.url }}" target="_blank" rel="noopener">Open in Jira</a>
+  <a class="side-link" href="{% url 'coverage' %}?plan={{ plan.key }}&technology={{ technology|urlencode }}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}">Coverage</a>
+  <a class="side-link" href="{% url 'defects' %}?plan={{ plan.key }}&technology={{ technology|urlencode }}">Defects</a>
+
+  <h3>Sections</h3>
+  <div id="sectionTreePanel">
+    {% include "dashboard/_sidebar_sections.html" with view_mode="plan" %}
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h1>{{ plan.key }} {{ plan.summary }}</h1>
+        <div class="small muted">
+          {% if plan.stack_name %}Stack: <strong>{{ plan.stack_name }}</strong> · {% endif %}
+          {% if plan.release_name %}Release: <strong>{{ plan.release_name }}</strong> · {% endif %}
+          {% if technology %}Technology: <strong>{{ technology }}</strong> · {% endif %}
+          {% if selected_execution %}
+            Run: <strong>{{ selected_execution }}</strong>
+          {% else %}
+            No run selected
+          {% endif %}
+        </div>
+      </div>
+      <div class="row">
+        <a class="btn" href="{% url 'plan_home' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&plan={{ plan.key }}">Change run</a>
+        {% if selected_execution %}
+          <a class="btn" href="?execution={{ selected_execution }}&technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&refresh=1">Refresh</a>
+        {% endif %}
+        <a class="btn" href="{{ plan.url }}" target="_blank" rel="noopener">Jira</a>
+      </div>
+    </div>
+    <div class="panel-body">
+      {% if not selected_execution %}
+        <div class="alert">
+          No Test Execution selected.
+          <a href="{% url 'plan_home' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&plan={{ plan.key }}">Choose a run</a>.
+        </div>
+      {% else %}
+        {% include "dashboard/_status_overview.html" with summary=overall_summary summary_json=overall_summary_json enable_status_filters=True %}
+      {% endif %}
+    </div>
+  </div>
+
+  {% if selected_execution %}
+  <div class="panel" id="casesPanel"
+       data-page="plan"
+       data-plan="{{ plan.key }}"
+       data-execution="{{ selected_execution }}">
+    <div class="panel-header" id="casesPanelHeader">
+      <h2>
+        {{ section_name }}
+        <span class="chip" style="margin-left:8px;">{{ case_count }}</span>
+      </h2>
+    </div>
+    <div class="panel-body" id="casesPanelBody">
+      {% include "dashboard/_cases_panel_body.html" with view_mode="plan" empty_message="No cases for this plan/section/filter." %}
+    </div>
+  </div>
+  {% endif %}
+{% endblock %}

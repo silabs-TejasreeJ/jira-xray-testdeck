@@ -1,0 +1,82 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · TestDeck</title>
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+  <style>
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background:
+        radial-gradient(circle at top left, #d7e6f8 0%, transparent 45%),
+        radial-gradient(circle at bottom right, #e8f3e4 0%, transparent 40%),
+        #f3f4f6;
+    }
+    .login-card {
+      width: min(420px, calc(100vw - 32px));
+      background: #fff;
+      border: 1px solid #d9dee7;
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(20, 35, 60, 0.08);
+      padding: 28px;
+    }
+    .login-card h1 {
+      margin: 0 0 6px;
+      font-size: 26px;
+      color: #1f4f86;
+    }
+    .login-card p {
+      margin: 0 0 18px;
+      color: #6b778c;
+      font-size: 14px;
+    }
+    .field { margin-bottom: 12px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: #6b778c;
+      margin-bottom: 4px;
+    }
+    .field input {
+      width: 100%;
+      border: 1px solid #d9dee7;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font: inherit;
+    }
+    .login-card .btn-primary {
+      width: 100%;
+      margin-top: 8px;
+      padding: 10px 12px;
+    }
+  </style>
+</head>
+<body>
+  <form class="login-card" method="post" action="{% url 'login' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <h1>TestDeck</h1>
+    <p>Sign in with your Jira credentials to continue.</p>
+    {% if error %}
+      <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+    <div class="field">
+      <label for="base_url">Jira URL</label>
+      <input id="base_url" name="base_url" value="{{ base_url }}" required>
+    </div>
+    <div class="field">
+      <label for="username">Username</label>
+      <input id="username" name="username" value="{{ username }}" autocomplete="username" required autofocus>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn-primary" type="submit">Sign in &amp; open TestDeck</button>
+  </form>
+</body>
+</html>

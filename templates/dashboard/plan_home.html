@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block sidebar %}
+  <h3>Plan View</h3>
+  <div class="small muted" style="padding:8px 14px;">
+    Pick a Test Plan and Test Execution, then Submit.
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h1>Plan View</h1>
+        <div class="small muted">
+          Select a Test Plan and Test Execution, then Submit.
+        </div>
+      </div>
+    </div>
+    <div class="panel-body">
+      {% if connection and not connection.ok %}
+        <div class="alert alert-error">{{ connection.message }}</div>
+      {% endif %}
+
+      <form method="get" class="context-form compact" id="planHomeForm">
+        <input type="hidden" name="technology" value="{{ technology }}">
+        <input type="hidden" name="stack" value="{{ stack_name }}">
+        <input type="hidden" name="release" value="{{ release_name }}">
+
+        <div class="context-grid context-grid-2">
+          <div class="field">
+            {% include "dashboard/_plan_select.html" with current_plan=plan_key recent_plans=recent_plans select_id="planSelect" select_class="context-select" %}
+          </div>
+          <div class="field">
+            <label class="small muted" for="planExecutionSelect">Test Execution</label>
+            <select id="planExecutionSelect" name="execution" class="context-select"
+                    data-searchable
+                    data-placeholder="— select a run —"
+                    {% if not plan_key %}disabled{% endif %}>
+              <option value="">— select a run —</option>
+              {% for run in executions %}
+                <option value="{{ run.key }}"
+                  {% if selected_execution == run.key %}selected{% endif %}>
+                  {{ run.key }}{% if run.summary %} — {{ run.summary|truncatechars:70 }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="context-actions">
+          <button type="submit" class="btn btn-primary" id="openPlanBtn">Submit</button>
+          <a class="btn" href="{% url 'plan_home' %}">Clear</a>
+          <a class="btn btn-primary" id="continueLastRunBtn" hidden>Continue last run</a>
+        </div>
+      </form>
+
+      <div id="continueLastRunHint" class="alert" style="margin-top:12px;" hidden></div>
+
+      {% if not plan_key %}
+        <div class="alert" style="margin-top:12px;">
+          Choose a Test Plan, then Submit to load executions.
+        </div>
+      {% elif not executions %}
+        <div class="alert alert-error" style="margin-top:12px;">
+          No Test Executions linked to <strong>{{ plan_key }}</strong>.
+        </div>
+      {% else %}
+        <div class="alert" style="margin-top:12px;">
+          Choose a <strong>Test Execution</strong>, then Submit to open the case grid.
+          For Excel export / import, use <a href="{% url 'results_update' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&plan={{ plan_key }}">Results Update</a>.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

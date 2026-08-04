@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block sidebar %}
+  <h3>Tests &amp; Results</h3>
+  <a class="side-link active" href="{% url 'execution_detail' execution.key %}?technology={{ technology|urlencode }}">All sections</a>
+  <a class="side-link" href="{% url 'coverage' %}?execution={{ execution.key }}&technology={{ technology|urlencode }}">Coverage</a>
+  <a class="side-link" href="{% url 'defects' %}?execution={{ execution.key }}&technology={{ technology|urlencode }}">Defects</a>
+  <a class="side-link" href="{{ execution.url }}" target="_blank" rel="noopener">Open in Jira</a>
+
+  <h3>Sections</h3>
+  <div id="sectionTreePanel">
+    {% include "dashboard/_sidebar_sections.html" with view_mode="execution" %}
+  </div>
+
+  <div style="padding:12px 14px;" class="small muted">
+    Created by {{ execution.reporter|default:"—" }}<br>
+    {% if execution.test_plan %}Belongs to plan {{ execution.test_plan }}{% endif %}
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h1>{{ execution.key }} {{ execution.summary }}</h1>
+        <div class="small muted">
+          Status: {{ execution.status|default:"—" }}
+          {% if execution.environments %} · Env: {{ execution.environments }}{% endif %}
+          {% if execution.stack_name %} · Stack: {{ execution.stack_name }}{% endif %}
+        </div>
+      </div>
+      <div class="row">
+        <a class="btn" href="{{ execution.url }}" target="_blank" rel="noopener">Open in Jira</a>
+        <a class="btn" href="{% url 'defects' %}?execution={{ execution.key }}">Defects</a>
+        <a class="btn" href="{% url 'coverage' %}?execution={{ execution.key }}">Coverage</a>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="meta-grid" style="margin-bottom:16px;">
+        <div><div class="label">Assignee</div>{{ execution.assignee|default:"Unassigned" }}</div>
+        <div><div class="label">Test Plan</div>{{ execution.test_plan|default:"—" }}</div>
+        <div><div class="label">Environments</div>{{ execution.environments|default:"—" }}</div>
+        <div><div class="label">Fix Versions</div>{{ execution.fixversions|join:", "|default:"—" }}</div>
+        <div><div class="label">Feature</div>{{ execution.feature_name|default:"—" }}</div>
+        <div><div class="label">Tech Area</div>{{ execution.tech_area|default:"—" }}</div>
+      </div>
+
+      {% include "dashboard/_status_overview.html" with summary=overall_summary summary_json=overall_summary_json enable_status_filters=True %}
+    </div>
+  </div>
+
+  <div class="panel" id="casesPanel"
+       data-page="execution"
+       data-execution="{{ execution.key }}"
+       data-plan="{{ execution.test_plan|default:'' }}">
+    <div class="panel-header" id="casesPanelHeader">
+      <h2>
+        {{ section_name }}
+        <span class="chip" style="margin-left:8px;">{{ case_count }}</span>
+      </h2>
+    </div>
+    <div class="panel-body" id="casesPanelBody">
+      {% include "dashboard/_cases_panel_body.html" with view_mode="execution" empty_message="No cases in this section/filter." %}
+    </div>
+  </div>
+{% endblock %}

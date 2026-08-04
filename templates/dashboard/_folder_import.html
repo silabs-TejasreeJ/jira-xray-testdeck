@@ -1,0 +1,72 @@
+{# Folder of HTML reports (browser folder picker and/or server path). #}
+<div class="import-tab-panel" data-tab-panel="folder" hidden>
+  <div class="panel" id="folderImportPanel"
+       data-execution="{{ execution_key }}"
+       data-technology="{{ technology }}">
+    <div class="panel-header">
+      <div>
+        <h2>Import folder</h2>
+        <div class="small muted">
+          Pick a folder of pytest-html reports, or paste a server folder/file path.
+          All <code>.htm</code>/<code>.html</code> files are parsed in one preview.
+          Only <strong>PASS</strong> is posted; FAIL and already-PASS in Xray are left untouched.
+        </div>
+      </div>
+    </div>
+    <div class="panel-body">
+      {% if not execution_key and not executions %}
+        <div class="alert">Select a Test Execution (run) first to import folder results.</div>
+      {% else %}
+        <div class="toolbar html-import-toolbar">
+          {% if not shared_execution_select %}
+            {% if executions %}
+              <label class="small muted" for="folderExecutionSelect">Test Execution</label>
+              <select id="folderExecutionSelect" class="zip-exec-select">
+                {% for run in executions %}
+                  <option value="{{ run.key }}"
+                    {% if execution_key == run.key or selected_execution == run.key %}selected{% endif %}>
+                    {{ run.key }}{% if run.summary %} — {{ run.summary|truncatechars:60 }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            {% endif %}
+          {% endif %}
+          <label class="small muted" for="folderServerPath">Server folder / file path</label>
+          <input type="text" id="folderServerPath" class="html-path-input"
+                 placeholder="C:\reports\run1 or C:\Desktop\first_run_autojoin.HTM"
+                 value="">
+        </div>
+        <div class="toolbar html-import-toolbar">
+          <label class="small muted" for="folderUploadFolder">Folder</label>
+          <input type="file" id="folderUploadFolder" name="folder_files"
+                 accept=".htm,.html,.HTM,.HTML,text/html"
+                 webkitdirectory directory multiple>
+          <button type="button" class="btn btn-primary" id="folderPreviewBtn">Preview</button>
+          <button type="button" class="btn" id="folderApplyBtn" disabled>Submit PASS</button>
+        </div>
+        <div id="folderUploadHint" class="small muted" style="margin-bottom:10px;">
+          Browser folder picker uploads every HTML under that folder · Or use a path the server can read
+        </div>
+        <div id="folderImportStatus" class="small muted" style="margin-bottom:8px;"></div>
+        <div id="folderImportSummary" class="html-import-summary" hidden></div>
+        <div id="folderImportPager" class="toolbar" style="margin-bottom:8px;" hidden></div>
+        <div class="table-wrap" id="folderImportTableWrap" hidden>
+          <table class="data" id="folderImportTable">
+            <thead>
+              <tr>
+                <th class="check-col"><input type="checkbox" id="folderSelectAll" title="Select all matches"></th>
+                <th>test_src_map_id</th>
+                <th>Case</th>
+                <th>Current</th>
+                <th>From HTML</th>
+                <th>Title</th>
+              </tr>
+            </thead>
+            <tbody id="folderImportBody"></tbody>
+          </table>
+        </div>
+        <div id="folderImportUnmatched" class="small muted" style="margin-top:10px;"></div>
+      {% endif %}
+    </div>
+  </div>
+</div>

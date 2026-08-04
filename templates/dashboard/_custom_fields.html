@@ -1,0 +1,39 @@
+<div class="panel" id="customFieldsPanel">
+  <div class="panel-header">
+    <div>
+      <h2>Test Details · Custom Fields</h2>
+      <div class="small muted">
+        Applied to every PASS result posted below. Leave a field on <em>None</em> to skip it.
+      </div>
+    </div>
+    <div class="row">
+      <span id="customFieldsStatus" class="small muted">Loading field mapping…</span>
+      <button type="button" class="btn" id="customFieldsReloadBtn">Refresh fields</button>
+    </div>
+  </div>
+  <div class="panel-body">
+    <div class="custom-fields-grid" id="customFieldsGrid">
+      {% for field in custom_fields %}
+        <label class="custom-field" data-field-key="{{ field.key }}">
+          <span class="label">{{ field.label }}</span>
+          <select class="custom-field-select" data-field-key="{{ field.key }}"
+                  data-field-id="{{ field.id|default:'' }}">
+            <option value="">None</option>
+            {% for opt in field.options %}
+              <option value="{{ opt }}"
+                {% if field.current == opt %}selected{% endif %}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+          <input type="text" class="custom-field-other" data-field-key="{{ field.key }}"
+                 placeholder="Or type a value" hidden>
+          <button type="button" class="btn btn-tiny custom-field-toggle" data-field-key="{{ field.key }}">
+            Custom
+          </button>
+        </label>
+      {% empty %}
+        <div class="muted">Custom fields unavailable.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+<script id="custom-fields-data" type="application/json">{{ custom_fields_json|safe }}</script>

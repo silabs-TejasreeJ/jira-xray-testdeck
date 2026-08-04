@@ -1,0 +1,61 @@
+<div class="import-tab-panel" data-tab-panel="excel" hidden>
+  <div class="panel" id="excelImportPanel" data-technology="{{ technology }}">
+    <div class="panel-header">
+      <div>
+        <h2>Import Excel results</h2>
+        <div class="small muted">
+          Upload the automation run report (e.g. <code>Report 6.xlsx</code>) with an
+          <code>OverAllStatus</code> sheet (<code>MasterCaseId</code> + <code>Result</code>).
+          Do <strong>not</strong> upload a TestDeck Cases / plan export — that is a different file.
+          Later <code>Time</code> wins for duplicates.
+          Only <strong>PASS</strong> results are posted; FAIL / ERROR are left unchanged.
+          Cases that already have PASS in Xray are left untouched.
+        </div>
+      </div>
+    </div>
+    <div class="panel-body">
+      {% if not executions %}
+        <div class="alert">No Test Executions linked to this plan.</div>
+      {% else %}
+        <div class="toolbar html-import-toolbar">
+          {% if not shared_execution_select %}
+            <label class="small muted" for="excelExecutionSelect">Test Execution</label>
+            <select id="excelExecutionSelect" class="excel-exec-select">
+              {% for run in executions %}
+                <option value="{{ run.key }}"
+                  {% if selected_execution == run.key %}selected{% endif %}>
+                  {{ run.key }}{% if run.summary %} — {{ run.summary|truncatechars:60 }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          {% endif %}
+          <label class="small muted" for="excelUploadFile">Excel file</label>
+          <input type="file" id="excelUploadFile"
+                 accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          <button type="button" class="btn btn-primary" id="excelPreviewBtn">Preview</button>
+          <button type="button" class="btn" id="excelApplyBtn" disabled>Submit PASS</button>
+        </div>
+        <div id="excelImportStatus" class="small muted" style="margin-bottom:8px;"></div>
+        <div id="excelImportSummary" class="html-import-summary" hidden></div>
+        <div id="excelImportPager" class="toolbar" style="margin-bottom:8px;" hidden></div>
+        <div class="table-wrap" id="excelImportTableWrap" hidden>
+          <table class="data" id="excelImportTable">
+            <thead>
+              <tr>
+                <th class="check-col"><input type="checkbox" id="excelSelectAll" title="Select all matches"></th>
+                <th>test_src_map_id</th>
+                <th>Case</th>
+                <th>Current</th>
+                <th>From report</th>
+                <th>Row time</th>
+                <th>Title</th>
+              </tr>
+            </thead>
+            <tbody id="excelImportBody"></tbody>
+          </table>
+        </div>
+        <div id="excelImportSkipped" class="small muted" style="margin-top:10px;"></div>
+      {% endif %}
+    </div>
+  </div>
+</div>

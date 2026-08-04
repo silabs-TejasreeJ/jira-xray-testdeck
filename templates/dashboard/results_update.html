@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block sidebar %}
+  <h3>Results Update</h3>
+  <div class="side-meta">
+    {% if plan_key %}
+      <div class="small"><strong>Plan</strong><br>{{ plan_key }}</div>
+    {% endif %}
+    {% if selected_execution %}
+      <div class="small" style="margin-top:8px;"><strong>Run</strong><br>{{ selected_execution }}</div>
+    {% endif %}
+  </div>
+  {% if plan_key and selected_execution %}
+    <a class="side-link" href="{% url 'plan_detail' plan_key %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&execution={{ selected_execution }}">Open Plan View</a>
+    <a class="side-link" href="{% url 'execution_detail' selected_execution %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Open Execution</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <h1>Results Update</h1>
+        <div class="small muted">
+          Select a Test Plan and Test Execution, then use the
+          <strong>Export Excel</strong> / Import tabs below.
+        </div>
+      </div>
+    </div>
+    <div class="panel-body">
+      <form method="get" class="context-form compact" id="resultsPlanForm">
+        <input type="hidden" name="technology" value="{{ technology }}">
+        <input type="hidden" name="stack" value="{{ stack_name }}">
+        <input type="hidden" name="release" value="{{ release_name }}">
+
+        <div class="context-grid context-grid-2">
+          <div class="field">
+            {% include "dashboard/_plan_select.html" with current_plan=plan_key recent_plans=recent_plans select_id="resultsPlanSelect" select_class="context-select" %}
+          </div>
+          <div class="field">
+            <label class="small muted" for="resultsExecutionSelect">Test Execution</label>
+            <select id="resultsExecutionSelect" name="execution" class="context-select"
+                    data-searchable
+                    data-placeholder="— select a run —"
+                    {% if not plan_key %}disabled{% endif %}>
+              <option value="">— select a run —</option>
+              {% for run in executions %}
+                <option value="{{ run.key }}"
+                  {% if selected_execution == run.key %}selected{% endif %}>
+                  {{ run.key }}{% if run.summary %} — {{ run.summary|truncatechars:60 }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="context-actions">
+          <button type="submit" class="btn btn-primary">Submit</button>
+          <a class="btn" href="{% url 'results_update' %}">Clear</a>
+        </div>
+      </form>
+
+      {% if not plan_key %}
+        <div class="alert" style="margin-top:12px;">Choose a Test Plan, then Submit to load executions.</div>
+      {% elif not selected_execution %}
+        <div class="alert" style="margin-top:12px;">
+          Choose a Test Execution for import / run export, or open the
+          <strong>Export Excel</strong> tab to download the whole plan.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if plan_key %}
+    {% if selected_execution %}
+      {% include "dashboard/_custom_fields.html" with custom_fields=custom_fields custom_fields_json=custom_fields_json custom_fields_meta=custom_fields_meta %}
+    {% endif %}
+    {% include "dashboard/_import_tabs.html" with plan_key=plan_key execution_key=selected_execution selected_execution=selected_execution executions=executions technology=technology shared_execution_select=True %}
+  {% endif %}
+{% endblock %}

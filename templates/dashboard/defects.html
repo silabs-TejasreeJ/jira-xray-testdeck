@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div class="panel">
+    <div class="panel-header">
+      <h1>Linked Defects</h1>
+      {% if execution %}
+        <a class="btn" href="{% url 'execution_detail' execution.key %}">Back to {{ execution.key }}</a>
+      {% endif %}
+    </div>
+    <div class="panel-body">
+      {% if execution %}
+        <div class="alert">
+          Defects linked from tests in
+          <a href="{% url 'execution_detail' execution.key %}">{{ execution.key }}</a>.
+        </div>
+      {% endif %}
+
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Defect</th>
+            <th>Summary</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Linked Tests</th>
+            <th>From Failed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for defect in defects %}
+            <tr>
+              <td><a href="{{ defect.url }}" target="_blank" rel="noopener">{{ defect.key }}</a></td>
+              <td>{{ defect.summary|default:"—" }}</td>
+              <td>{{ defect.status|default:"—" }}</td>
+              <td>{{ defect.priority|default:"—" }}</td>
+              <td class="small">{{ defect.linked_tests|join:", " }}</td>
+              <td>{% if defect.from_failed %}Yes{% else %}No{% endif %}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="muted">No linked defects found for this execution.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,99 @@
+{# Clear Excel export actions for a plan and/or selected Test Execution. #}
+<div class="panel" id="excelExportPanel"
+     data-plan="{{ plan_key|default:'' }}"
+     data-execution="{{ execution_key|default:selected_execution|default:'' }}">
+  <div class="panel-header">
+    <div>
+      <h2>Export Excel</h2>
+      <div class="small muted">
+        Pick one export. Full run / plan dumps include references and defect details.
+        FAIL Jira summary matches the triage summary layout.
+      </div>
+    </div>
+  </div>
+  <div class="panel-body">
+    {% if not plan_key and not execution_key and not selected_execution %}
+      <div class="alert">Select a Test Plan (and optionally a Test Execution) above first.</div>
+    {% else %}
+      <div class="export-choice-grid export-choice-grid-3">
+        <div class="export-choice">
+          <h3>This Test Execution</h3>
+          <p class="small muted">
+            Full case dump
+            {% if selected_execution or execution_key %}
+              — <strong>{{ selected_execution|default:execution_key }}</strong>
+            {% endif %}
+          </p>
+          <ul class="small muted export-choice-list">
+            <li>All cases in the selected run</li>
+            <li>References, status, defects, steps</li>
+          </ul>
+          {% if selected_execution or execution_key %}
+            <a class="btn btn-primary"
+               href="{% url 'export_execution_xlsx' selected_execution|default:execution_key %}?all=1">
+              Download run Excel
+            </a>
+          {% else %}
+            <button type="button" class="btn btn-primary" disabled>Select a run first</button>
+          {% endif %}
+        </div>
+
+        <div class="export-choice">
+          <h3>FAIL Jira summary</h3>
+          <p class="small muted">
+            Triage-style summary of Jiras linked on FAIL cases
+          </p>
+          <ul class="small muted export-choice-list">
+            <li>Type · Issue key · TCs impacted</li>
+            <li>Summary · Status · Priority · Assignee</li>
+            <li>Plus a compact FAIL case → Jira map</li>
+          </ul>
+          {% if selected_execution or execution_key %}
+            <a class="btn btn-primary"
+               href="{% url 'export_fail_jira_summary_xlsx' selected_execution|default:execution_key %}?all=1">
+              Download FAIL Jira summary
+            </a>
+          {% else %}
+            <button type="button" class="btn btn-primary" disabled>Select a run first</button>
+          {% endif %}
+        </div>
+
+        <div class="export-choice">
+          <h3>Entire Test Plan</h3>
+          <p class="small muted">
+            All runs under
+            {% if plan_key %}<strong>{{ plan_key }}</strong>{% else %}the plan{% endif %}
+          </p>
+          <ul class="small muted export-choice-list">
+            <li>Every linked Test Execution</li>
+            <li>Progress bar while loading</li>
+          </ul>
+          {% if plan_key %}
+            <button type="button" class="btn btn-primary" id="planExportStartBtn"
+                    data-plan="{{ plan_key }}">
+              Download plan Excel
+            </button>
+          {% else %}
+            <button type="button" class="btn btn-primary" disabled>Select a Test Plan first</button>
+          {% endif %}
+        </div>
+      </div>
+
+      <div id="planExportProgress" class="export-progress" hidden>
+        <div class="export-progress-head">
+          <strong id="planExportProgressTitle">Preparing export…</strong>
+          <span class="small muted" id="planExportProgressMeta"></span>
+        </div>
+        <div class="export-progress-track" aria-hidden="true">
+          <div class="export-progress-bar" id="planExportProgressBar" style="width:0%"></div>
+        </div>
+        <div class="small muted" id="planExportProgressDetail"></div>
+        <div class="export-progress-actions">
+          <button type="button" class="btn" id="planExportCancelBtn" hidden>Cancel</button>
+          <a class="btn btn-primary" id="planExportDownloadBtn" hidden>Download file</a>
+          <button type="button" class="btn" id="planExportDismissBtn" hidden>Dismiss</button>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+</div>

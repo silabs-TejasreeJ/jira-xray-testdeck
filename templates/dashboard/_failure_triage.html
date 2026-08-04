@@ -1,0 +1,46 @@
+{# Shared Failure triage panel — preview only after HTML / ZIP / Excel preview. #}
+<div class="panel" id="failureTriagePanel" hidden>
+  <div class="panel-header">
+    <div>
+      <h2>Failure triage</h2>
+      <div class="small muted">
+        Preview only: triage <strong>TODO / untested</strong> cases in Xray only
+        (one row per untested case). Report FAIL/ERROR details are shown when the
+        upload has them. Already <strong>PASS</strong> in Xray is skipped.
+        <strong>Linked on case</strong> = already on Xray.
+        <strong>Selected</strong> = the ticket you pick here (updates live).
+        Picking a Jira applies it to <strong>all cases with the same failure description</strong>
+        (not only the same case ID) and is remembered on later uploads.
+        Does <strong>not</strong> write to Jira or Xray.
+      </div>
+    </div>
+    <button type="button" class="btn btn-primary" id="failureTriageDownloadBtn" disabled>
+      Download triage Excel
+    </button>
+  </div>
+  <div class="panel-body">
+    <div id="failureTriageStatus" class="small muted" style="margin-bottom:8px;"></div>
+    <div id="failureTriageSummary" class="html-import-summary" hidden></div>
+    <div id="failureTriagePager" class="toolbar" style="margin-bottom:8px;" hidden></div>
+    <div class="table-wrap" id="failureTriageTableWrap" hidden>
+      <table class="data" id="failureTriageTable">
+        <thead>
+          <tr>
+            <th>Kind</th>
+            <th>test_src_map_id</th>
+            <th>Case</th>
+            <th>Section</th>
+            <th>Reason</th>
+            <th style="min-width:160px;">API / info</th>
+            <th>Linked on case</th>
+            <th>Selected</th>
+            <th style="min-width:280px;">Pick Jira</th>
+            <th>Title</th>
+          </tr>
+        </thead>
+        <tbody id="failureTriageBody"></tbody>
+      </table>
+    </div>
+    <div id="failureTriageUnmatched" class="small muted" style="margin-top:10px;"></div>
+  </div>
+</div>

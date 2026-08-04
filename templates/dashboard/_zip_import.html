@@ -1,0 +1,61 @@
+{# ZIP file(s) only — use Import Folder for directories of HTML. #}
+<div class="import-tab-panel" data-tab-panel="zip" hidden>
+  <div class="panel" id="zipImportPanel" data-technology="{{ technology }}">
+    <div class="panel-header">
+      <div>
+        <h2>Import ZIP files</h2>
+        <div class="small muted">
+          Upload one or more ZIPs of pytest-html reports.
+          Duplicate content is removed; later filename timestamps win per case.
+          Only <strong>PASS</strong> is posted; FAIL and already-PASS in Xray are left untouched.
+        </div>
+      </div>
+    </div>
+    <div class="panel-body">
+      {% if not executions %}
+        <div class="alert">No Test Executions linked to this plan.</div>
+      {% else %}
+        <div class="toolbar html-import-toolbar">
+          {% if not shared_execution_select %}
+            <label class="small muted" for="zipExecutionSelect">Test Execution</label>
+            <select id="zipExecutionSelect" class="zip-exec-select">
+              {% for run in executions %}
+                <option value="{{ run.key }}"
+                  {% if selected_execution == run.key %}selected{% endif %}>
+                  {{ run.key }}{% if run.summary %} — {{ run.summary|truncatechars:60 }}{% endif %}
+                </option>
+              {% endfor %}
+            </select>
+          {% endif %}
+          <label class="small muted" for="zipUploadFiles">ZIP files</label>
+          <input type="file" id="zipUploadFiles" name="zips" accept=".zip,application/zip" multiple>
+          <button type="button" class="btn btn-primary" id="zipPreviewBtn">Preview</button>
+          <button type="button" class="btn" id="zipApplyBtn" disabled>Submit PASS</button>
+        </div>
+        <div id="zipUploadHint" class="small muted" style="margin-bottom:10px;">
+          Multi-select ZIPs (Ctrl/Cmd+click) · All processed in one preview
+        </div>
+        <div id="zipImportStatus" class="small muted" style="margin-bottom:8px;"></div>
+        <div id="zipImportSummary" class="html-import-summary" hidden></div>
+        <div id="zipImportPager" class="toolbar" style="margin-bottom:8px;" hidden></div>
+        <div class="table-wrap" id="zipImportTableWrap" hidden>
+          <table class="data" id="zipImportTable">
+            <thead>
+              <tr>
+                <th class="check-col"><input type="checkbox" id="zipSelectAll" title="Select all matches"></th>
+                <th>test_src_map_id</th>
+                <th>Case</th>
+                <th>Current</th>
+                <th>From report</th>
+                <th>Winning file</th>
+                <th>Title</th>
+              </tr>
+            </thead>
+            <tbody id="zipImportBody"></tbody>
+          </table>
+        </div>
+        <div id="zipImportSkipped" class="small muted" style="margin-top:10px;"></div>
+      {% endif %}
+    </div>
+  </div>
+</div>

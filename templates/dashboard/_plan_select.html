@@ -1,0 +1,18 @@
+{# Searchable Test Plan dropdown. #}
+<label class="small muted" for="{{ select_id|default:'planSelect' }}">Test Plan</label>
+<select id="{{ select_id|default:'planSelect' }}"
+        name="{{ input_name|default:'plan' }}"
+        class="{{ select_class|default:'zip-exec-select plan-select' }}"
+        data-plan-select
+        data-searchable
+        data-placeholder="— select a plan —"
+        {% if required %}required{% endif %}>
+  <option value="" {% if not current_plan %}selected{% endif %}>— select a plan —</option>
+  {% for p in recent_plans %}
+    <option value="{{ p.key }}"
+            data-summary="{{ p.summary|default:'' }}"
+      {% if p.key == current_plan %}selected{% endif %}>
+      {{ p.key }}{% if p.summary %} — {{ p.summary|truncatechars:70 }}{% endif %}
+    </option>
+  {% endfor %}
+</select>

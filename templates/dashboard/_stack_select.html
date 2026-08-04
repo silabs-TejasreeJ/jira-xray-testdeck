@@ -1,0 +1,13 @@
+{# Shared stack_name filter — searchable via data-searchable. #}
+<select id="{{ select_id|default:'stack' }}" name="stack"
+        class="{{ select_class|default:'' }}"
+        data-searchable
+        data-placeholder="{{ placeholder|default:'All stacks' }}"
+        {% if onchange %}onchange="{{ onchange }}"{% endif %}
+        style="{{ select_style|default:'' }}">
+  <option value="">{% if not selected_stack %}selected{% endif %}>{{ placeholder|default:"All stacks" }}</option>
+  {% for opt in STACK_OPTIONS %}
+    <option value="{{ opt }}"
+      {% if selected_stack == opt %}selected{% endif %}>{{ opt }}</option>
+  {% endfor %}
+</select>
