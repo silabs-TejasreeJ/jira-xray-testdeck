@@ -6,8 +6,8 @@ TestDeck is a Django web app that gives Silicon Labs SQA a **TestRail-like** vie
 |---|---|
 | **Jira** | `https://jira.silabs.com` |
 | **Default project** | `SW_SQA_TE` (executions / plans) |
-| **Personal repo** | [silabs-TejasreeJ/jira-xray-testdeck](https://github.com/silabs-TejasreeJ/jira-xray-testdeck) |
-| **Org repo** | [SiliconLabsInternal/jira-xray-testdeck](https://github.com/SiliconLabsInternal/jira-xray-testdeck) |
+| **Repo** | [silabs-TejasreeJ/jira-xray-testdeck](https://github.com/silabs-TejasreeJ/jira-xray-testdeck) |
+| **Author** | Teja Sree Jammulamadaka |
 
 ---
 
@@ -41,13 +41,6 @@ Optional: HTML/ZIP/Excel result files from your automation runs for import.
 
 ```bash
 git clone https://github.com/silabs-TejasreeJ/jira-xray-testdeck.git
-cd jira-xray-testdeck
-```
-
-If you use the org copy instead:
-
-```bash
-git clone https://github.com/SiliconLabsInternal/jira-xray-testdeck.git
 cd jira-xray-testdeck
 ```
 
@@ -219,17 +212,13 @@ On Plan View / Execution case tables:
 
 Suggestions, bugs, and improvement ideas are welcome.
 
-1. Open the repo you can access:  
-   [silabs-TejasreeJ/jira-xray-testdeck](https://github.com/silabs-TejasreeJ/jira-xray-testdeck)  
-   or [SiliconLabsInternal/jira-xray-testdeck](https://github.com/SiliconLabsInternal/jira-xray-testdeck)
+1. Open [silabs-TejasreeJ/jira-xray-testdeck](https://github.com/silabs-TejasreeJ/jira-xray-testdeck)
 2. Go to **Issues** → **New issue**
 3. Include:
    - What you were doing (browse / import / triage / export)
    - Expected vs actual behavior
    - Screenshots or sample HTML filenames if relevant (no passwords / tokens)
-4. Maintainers will triage Issues one by one
-
-If you get a **404** on the org repo, you need access — ask for an invite (GitHub username) or use the personal repo above if it is public/shared with you.
+4. Issues will be triaged one by one
 
 For deep dives on past bugs and fixes, see [PROBLEMS_AND_SOLUTIONS.md](PROBLEMS_AND_SOLUTIONS.md).
 
@@ -245,7 +234,6 @@ For deep dives on past bugs and fixes, see [PROBLEMS_AND_SOLUTIONS.md](PROBLEMS_
 | Stale statuses after Jira change | Click **Refresh** on the run |
 | Triage empty after re-upload | Expected if remaining cases are Xray **PASS**; triage lists **TODO** only |
 | Import “applied” but FAIL still open | Imports write **PASS only**; set FAIL from the case table |
-| Colleague cannot open org repo | Repo may be private — invite them or request **internal** visibility / team access |
 | SSL errors to Jira | Only if your admin says so: `JIRA_VERIFY_SSL=false` (self-signed) |
 
 ---
