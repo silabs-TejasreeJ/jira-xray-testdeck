@@ -8,9 +8,6 @@ TestDeck is a Django web app that gives Silicon Labs SQA a **TestRail-like** vie
 | **Default project** | `SW_SQA_TE` (executions / plans) |
 | **Personal repo** | [silabs-TejasreeJ/jira-xray-testdeck](https://github.com/silabs-TejasreeJ/jira-xray-testdeck) |
 | **Org repo** | [SiliconLabsInternal/jira-xray-testdeck](https://github.com/SiliconLabsInternal/jira-xray-testdeck) |
-| **Author** | Teja Sree Jammulamadaka |
-
-The app footer always shows **Teja Sree Jammulamadaka · TestDeck** (built into the code, not configured via `.env`).
 
 ---
 
