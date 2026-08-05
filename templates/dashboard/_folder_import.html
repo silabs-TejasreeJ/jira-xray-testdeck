@@ -1,4 +1,4 @@
-{# Folder of HTML reports (browser folder picker and/or server path). #}
+{# Folder of HTML reports (browser folder picker). #}
 <div class="import-tab-panel" data-tab-panel="folder" hidden>
   <div class="panel" id="folderImportPanel"
        data-execution="{{ execution_key }}"
@@ -7,8 +7,8 @@
       <div>
         <h2>Import folder</h2>
         <div class="small muted">
-          Pick a folder of pytest-html reports, or paste a server folder/file path.
-          All <code>.htm</code>/<code>.html</code> files are parsed in one preview.
+          Pick a folder of pytest-html reports.
+          All <code>.htm</code>/<code>.html</code> files are uploaded and parsed in one preview.
           Only <strong>PASS</strong> is posted; FAIL and already-PASS in Xray are left untouched.
         </div>
       </div>
@@ -31,12 +31,6 @@
               </select>
             {% endif %}
           {% endif %}
-          <label class="small muted" for="folderServerPath">Server folder / file path</label>
-          <input type="text" id="folderServerPath" class="html-path-input"
-                 placeholder="C:\reports\run1 or C:\Desktop\first_run_autojoin.HTM"
-                 value="">
-        </div>
-        <div class="toolbar html-import-toolbar">
           <label class="small muted" for="folderUploadFolder">Folder</label>
           <input type="file" id="folderUploadFolder" name="folder_files"
                  accept=".htm,.html,.HTM,.HTML,text/html"
@@ -45,7 +39,7 @@
           <button type="button" class="btn" id="folderApplyBtn" disabled>Submit PASS</button>
         </div>
         <div id="folderUploadHint" class="small muted" style="margin-bottom:10px;">
-          Browser folder picker uploads every HTML under that folder · Or use a path the server can read
+          Folder picker uploads every HTML file under that folder
         </div>
         <div id="folderImportStatus" class="small muted" style="margin-bottom:8px;"></div>
         <div id="folderImportSummary" class="html-import-summary" hidden></div>

@@ -30,7 +30,7 @@
             <span class="status-pct">({{ item.pct }}%)</span>
           </a>
         {% else %}
-          <div class="status-row">
+          <div class="status-row" data-status="{{ item.status }}">
             <span class="swatch" style="background:{{ item.color }}"></span>
             <span class="status-name">
               {% if item.status == "PASS" %}Passed

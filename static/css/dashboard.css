@@ -846,6 +846,23 @@ table.data tr:hover td { background: #fafcff; }
   gap: 8px;
   margin-top: 12px;
 }
+.export-progress.is-done {
+  border-color: #9ec9a8;
+  background: #f4faf6;
+}
+.export-progress.is-done .export-progress-bar {
+  background: linear-gradient(90deg, #2f7d4a, #3d9a5c);
+}
+.export-progress.is-error {
+  border-color: #e0a8a8;
+  background: #fdf5f5;
+}
+.testrail-summary.is-refreshed {
+  outline: 2px solid #3d9a5c;
+  outline-offset: 4px;
+  border-radius: 8px;
+  transition: outline-color 0.2s ease;
+}
 @media (max-width: 1000px) {
   .export-choice-grid-3 {
     grid-template-columns: 1fr;

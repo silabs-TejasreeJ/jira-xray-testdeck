@@ -72,6 +72,20 @@
 
   {% if plan_key %}
     {% if selected_execution %}
+      <div class="panel" style="margin-bottom:16px;">
+        <div class="panel-header">
+          <div>
+            <h2>Execution status</h2>
+            <div class="small muted">
+              Live counts for <strong>{{ selected_execution }}</strong>.
+              Refreshes automatically after PASS updates.
+            </div>
+          </div>
+        </div>
+        <div class="panel-body">
+          {% include "dashboard/_status_overview.html" with summary=overall_summary summary_json=overall_summary_json enable_status_filters=False selected_execution=selected_execution technology=technology stack_name=stack_name release_name=release_name %}
+        </div>
+      </div>
       {% include "dashboard/_custom_fields.html" with custom_fields=custom_fields custom_fields_json=custom_fields_json custom_fields_meta=custom_fields_meta %}
     {% endif %}
     {% include "dashboard/_import_tabs.html" with plan_key=plan_key execution_key=selected_execution selected_execution=selected_execution executions=executions technology=technology shared_execution_select=True %}

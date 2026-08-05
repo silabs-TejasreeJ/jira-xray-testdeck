@@ -157,14 +157,14 @@ Open **Results Update** → `/results-update/`.
 | Tab | Input | Writes to Xray? |
 |-----|--------|-----------------|
 | **Import HTML** | One or more `.htm` / `.html` files | **PASS only** |
-| **Import Folder** | Browser folder of HTML and/or a server folder path | **PASS only** |
+| **Import Folder** | Browser folder of HTML reports | **PASS only** |
 | **Import ZIP** | One or more `.zip` archives containing HTML | **PASS only** |
 | **Import Excel** | OverAllStatus workbook | **PASS only** |
 
 ### Recommended flow
 
 1. Select the target **Test Execution** (same as Plan View context).
-2. Choose an import tab and select files / folder / path.
+2. Choose an import tab and select files or a folder.
 3. Run **Preview** — review matched cases and status counts (including TODO / report FAIL chips).
 4. Review **Failure triage** (appears after preview; **read-only** — does not write to Jira/Xray).
 5. If you want to apply passes, confirm the **PASS apply** step.

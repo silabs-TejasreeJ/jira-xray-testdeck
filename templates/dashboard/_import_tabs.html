@@ -38,12 +38,15 @@
       <strong id="applyProgressTitle">Updating results…</strong>
       <span class="small muted" id="applyProgressMeta"></span>
     </div>
-    <div class="export-progress-track" aria-hidden="true">
+    <div class="export-progress-track" id="applyProgressTrack" aria-hidden="true">
       <div class="export-progress-bar" id="applyProgressBar" style="width:0%"></div>
     </div>
     <div id="applyProgressStats" class="html-import-summary" hidden></div>
     <div class="small muted" id="applyProgressDetail"></div>
     <div class="export-progress-actions">
+      <button type="button" class="btn btn-primary" id="applyProgressUploadMoreBtn" hidden>
+        Upload more files
+      </button>
       <button type="button" class="btn" id="applyProgressDismissBtn" hidden>Dismiss</button>
     </div>
   </div>

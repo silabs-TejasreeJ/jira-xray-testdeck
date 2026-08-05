@@ -53,7 +53,7 @@ async function parseJsonResponse(resp, fallbackError) {
       throw new Error(
         fallbackError ||
           `Server returned HTML instead of JSON (HTTP ${resp.status}). ` +
-            "Upload may be too large — try Import ZIP, fewer HTML files, or a server folder path."
+            "Upload may be too large — try Import ZIP or fewer HTML files."
       );
     }
     throw new Error(
@@ -156,7 +156,9 @@ function applyOverallSummary(summary) {
     const pass = chips.querySelector(".pass-chip");
     const fail = chips.querySelector(".fail-chip");
     const todo = chips.querySelector(".todo-chip");
-    const total = chips.querySelector(".chip:not(.pass-chip):not(.fail-chip):not(.todo-chip)");
+    const total = chips.querySelector(
+      ".chip:not(.pass-chip):not(.fail-chip):not(.todo-chip)"
+    );
     if (pass) pass.textContent = ` ${summary.passed ?? 0} PASS`;
     if (fail) fail.textContent = ` ${summary.failed ?? 0} FAIL`;
     if (todo) todo.textContent = ` ${summary.todo ?? 0} TODO`;
@@ -164,35 +166,85 @@ function applyOverallSummary(summary) {
   }
   const list = document.getElementById("statusList");
   if (list && Array.isArray(summary.chart)) {
-    list.querySelectorAll(".status-row").forEach((row) => {
-      const status = row.dataset.status;
-      if (!status) return;
-      const item = summary.chart.find((c) => c.status === status);
-      if (!item) return;
-      const count = row.querySelector(".status-count");
-      const pctEl = row.querySelector(".status-pct");
-      if (count) count.textContent = item.count;
-      if (pctEl) pctEl.textContent = `(${item.pct}%)`;
-    });
+    const existing = list.querySelectorAll(".status-row[data-status]");
+    if (existing.length) {
+      existing.forEach((row) => {
+        const status = row.dataset.status;
+        if (!status) return;
+        const item = summary.chart.find((c) => c.status === status);
+        if (!item) {
+          row.hidden = true;
+          return;
+        }
+        row.hidden = false;
+        const count = row.querySelector(".status-count");
+        const pctEl = row.querySelector(".status-pct");
+        if (count) count.textContent = item.count;
+        if (pctEl) pctEl.textContent = `(${item.pct}%)`;
+      });
+    } else {
+      list.innerHTML = summary.chart
+        .map(
+          (item) => `
+        <div class="status-row" data-status="${item.status}">
+          <span class="swatch" style="background:${item.color || "#94a3b8"}"></span>
+          <span class="status-name">${item.status}</span>
+          <span class="status-count">${item.count}</span>
+          <span class="status-pct">(${item.pct}%)</span>
+        </div>`
+        )
+        .join("");
+    }
   }
 }
 
-async function refreshExecutionSummary(executionKey) {
+async function refreshExecutionSummary(executionKey, { force = false } = {}) {
   const key = executionKey || currentExecutionKey();
-  if (!key) return;
+  if (!key) return null;
   const params = new URLSearchParams(window.location.search);
   const tech = params.get("technology") || "";
   try {
+    const qs = new URLSearchParams();
+    if (tech) qs.set("technology", tech);
+    if (force) qs.set("refresh", "1");
+    const q = qs.toString();
     const url = `/api/executions/${encodeURIComponent(key)}/summary/${
-      tech ? `?technology=${encodeURIComponent(tech)}` : ""
+      q ? `?${q}` : ""
     }`;
     const resp = await fetch(url);
     const data = await resp.json();
-    if (!resp.ok) return;
-    applyOverallSummary(data.overall_summary || data);
+    if (!resp.ok) return null;
+    const summary = data.overall_summary || data;
+    applyOverallSummary(summary);
+    return summary;
   } catch (_e) {
-    /* non-fatal */
+    return null;
   }
+}
+
+async function refreshUiAfterPassApply(executionKey) {
+  const key = executionKey || resolveImportExecution() || currentExecutionKey();
+  if (!key) return null;
+  const summary = await refreshExecutionSummary(key, { force: true });
+  const overview = document.getElementById("statusOverview");
+  if (overview) {
+    overview.classList.add("is-refreshed");
+    window.setTimeout(() => overview.classList.remove("is-refreshed"), 2000);
+    if (typeof overview.scrollIntoView === "function") {
+      overview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+  const casesPanel = document.getElementById("casesPanel");
+  if (casesPanel) {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("refresh", "1");
+      await loadCasesPartial(u.toString(), { push: false });
+    } catch (_e) {
+      /* non-fatal */
+    }
+  }
+  return summary;
 }
 
 async function updateCaseStatus(selectEl) {
@@ -1944,16 +1996,196 @@ function initFailureTriage() {
 
 let _applyPollTimer = null;
 
-function paintApplyProgress(job) {
+function hideImportDoneState() {
+  const box = document.getElementById("applyProgress");
+  if (!box) return;
+  box.hidden = true;
+  box.classList.remove("is-done", "is-error");
+  const uploadMoreBtn = document.getElementById("applyProgressUploadMoreBtn");
+  const dismissBtn = document.getElementById("applyProgressDismissBtn");
+  const track = document.getElementById("applyProgressTrack");
+  if (uploadMoreBtn) uploadMoreBtn.hidden = true;
+  if (dismissBtn) dismissBtn.hidden = true;
+  if (track) track.hidden = false;
+}
+
+function clearImportPreviewStaging() {
+  for (const prefix of ["htmlImport", "folderImport", "zipImport", "excelImport"]) {
+    const summary = document.getElementById(`${prefix}Summary`);
+    const tableWrap = document.getElementById(`${prefix}TableWrap`);
+    const pager = document.getElementById(`${prefix}Pager`);
+    const status = document.getElementById(`${prefix}Status`);
+    const body = document.getElementById(`${prefix}Body`);
+    if (summary) {
+      summary.hidden = true;
+      summary.innerHTML = "";
+    }
+    if (tableWrap) tableWrap.hidden = true;
+    if (pager) pager.hidden = true;
+    if (status) {
+      status.textContent = "";
+      status.className = "small muted";
+    }
+    if (body) body.innerHTML = "";
+  }
+  for (const id of [
+    "htmlImportUnmatched",
+    "folderImportUnmatched",
+    "zipImportSkipped",
+    "excelImportSkipped",
+  ]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = "";
+  }
+  for (const id of [
+    "htmlApplyBtn",
+    "folderApplyBtn",
+    "zipApplyBtn",
+    "excelApplyBtn",
+  ]) {
+    const btn = document.getElementById(id);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Submit PASS";
+    }
+  }
+  const triage = document.getElementById("failureTriagePanel");
+  if (triage) triage.hidden = true;
+  const triageDownload = document.getElementById("failureTriageDownloadBtn");
+  if (triageDownload) triageDownload.disabled = true;
+  _failureTriageState = {
+    execution: "",
+    failures: [],
+    unmatched: [],
+    todoCases: [],
+    todoCount: 0,
+    page: 1,
+  };
+}
+
+function clearImportFileInputs() {
+  for (const id of [
+    "htmlUploadFiles",
+    "folderUploadFolder",
+    "zipUploadFiles",
+    "zipUploadFolder",
+    "excelUploadFile",
+  ]) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    if (el.tagName === "INPUT") el.value = "";
+  }
+  for (const id of ["htmlUploadHint", "folderUploadHint", "zipUploadHint"]) {
+    const el = document.getElementById(id);
+    if (el && el.dataset.hintBase) el.innerHTML = el.dataset.hintBase;
+  }
+}
+
+function showImportDoneState({
+  updated = 0,
+  failed = 0,
+  execution = "",
+  message = "",
+  summary = null,
+} = {}) {
+  clearImportPreviewStaging();
   const box = document.getElementById("applyProgress");
   if (!box) return;
   box.hidden = false;
+  box.classList.remove("is-error");
+  box.classList.add("is-done");
   const titleEl = document.getElementById("applyProgressTitle");
   const metaEl = document.getElementById("applyProgressMeta");
   const detailEl = document.getElementById("applyProgressDetail");
   const barEl = document.getElementById("applyProgressBar");
+  const track = document.getElementById("applyProgressTrack");
+  const statsEl = document.getElementById("applyProgressStats");
+  const uploadMoreBtn = document.getElementById("applyProgressUploadMoreBtn");
+  const dismissBtn = document.getElementById("applyProgressDismissBtn");
+
+  if (titleEl) titleEl.textContent = "Done — results updated";
+  if (metaEl) {
+    metaEl.textContent = execution
+      ? `${execution} · UI refreshed`
+      : "UI refreshed";
+  }
+  if (track) track.hidden = false;
+  if (barEl) {
+    barEl.style.width = "100%";
+    barEl.setAttribute("aria-valuenow", "100");
+  }
+  if (statsEl) {
+    statsEl.hidden = false;
+    const live = summary
+      ? `
+      <span class="chip pass-chip">PASS: ${summary.passed ?? 0}</span>
+      <span class="chip fail-chip">FAIL: ${summary.failed ?? 0}</span>
+      <span class="chip todo-chip">TODO: ${summary.todo ?? 0}</span>
+      <span class="chip">Total: ${summary.total ?? 0}</span>`
+      : "";
+    statsEl.innerHTML = `
+      <span class="chip">Updated: ${updated}</span>
+      <span class="chip">Failed: ${failed}</span>
+      ${execution ? `<span class="chip">${execution}</span>` : ""}
+      ${live}
+    `;
+  }
+  if (detailEl) {
+    detailEl.className = "small muted";
+    detailEl.textContent =
+      message ||
+      `Posted ${updated} PASS result(s)` +
+        (failed ? ` · ${failed} failed` : "") +
+        ". Status overview refreshed. Choose new files when you want another import.";
+  }
+  if (uploadMoreBtn) uploadMoreBtn.hidden = false;
+  if (dismissBtn) dismissBtn.hidden = false;
+  if (typeof box.scrollIntoView === "function") {
+    box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function bindImportDoneActions() {
+  const dismissBtn = document.getElementById("applyProgressDismissBtn");
+  const uploadMoreBtn = document.getElementById("applyProgressUploadMoreBtn");
+  if (dismissBtn && !dismissBtn.dataset.bound) {
+    dismissBtn.dataset.bound = "1";
+    dismissBtn.addEventListener("click", () => {
+      hideImportDoneState();
+    });
+  }
+  if (uploadMoreBtn && !uploadMoreBtn.dataset.bound) {
+    uploadMoreBtn.dataset.bound = "1";
+    uploadMoreBtn.addEventListener("click", () => {
+      clearImportFileInputs();
+      clearImportPreviewStaging();
+      hideImportDoneState();
+      const activePanel = document.querySelector(
+        ".import-tab-panel:not([hidden])"
+      );
+      if (activePanel && typeof activePanel.scrollIntoView === "function") {
+        activePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      showToast("Ready for another upload — pick files and Preview.", "ok", 3500);
+    });
+  }
+}
+
+function paintApplyProgress(job) {
+  const box = document.getElementById("applyProgress");
+  if (!box) return;
+  box.hidden = false;
+  box.classList.remove("is-done", "is-error");
+  if (job.status === "done") box.classList.add("is-done");
+  if (job.status === "error") box.classList.add("is-error");
+  const titleEl = document.getElementById("applyProgressTitle");
+  const metaEl = document.getElementById("applyProgressMeta");
+  const detailEl = document.getElementById("applyProgressDetail");
+  const barEl = document.getElementById("applyProgressBar");
+  const track = document.getElementById("applyProgressTrack");
   const statsEl = document.getElementById("applyProgressStats");
   const dismissBtn = document.getElementById("applyProgressDismissBtn");
+  const uploadMoreBtn = document.getElementById("applyProgressUploadMoreBtn");
   const pct = Math.max(0, Math.min(100, Number(job.percent) || 0));
   const total = Number(job.total) || 0;
   const done = Number(job.done) || 0;
@@ -1962,6 +2194,7 @@ function paintApplyProgress(job) {
   const updated = Number(job.updated_count) || 0;
   const failed = Number(job.failed_count) || 0;
 
+  if (track) track.hidden = false;
   if (barEl) {
     barEl.style.width = `${pct}%`;
     barEl.setAttribute("aria-valuenow", String(pct));
@@ -1969,7 +2202,7 @@ function paintApplyProgress(job) {
   if (titleEl) {
     titleEl.textContent =
       job.status === "done"
-        ? "Results update complete"
+        ? "Done"
         : job.status === "error"
           ? "Results update failed"
           : job.message || "Updating results…";
@@ -2005,6 +2238,9 @@ function paintApplyProgress(job) {
       detailEl.className = "small muted";
     }
   }
+  if (uploadMoreBtn) {
+    uploadMoreBtn.hidden = job.status !== "done";
+  }
   if (dismissBtn) {
     dismissBtn.hidden = !(job.status === "done" || job.status === "error");
   }
@@ -2026,19 +2262,16 @@ async function runPassApplyWithProgress({
   setStatus,
   syncApply,
 }) {
-  const dismissBtn = document.getElementById("applyProgressDismissBtn");
-  if (dismissBtn && !dismissBtn.dataset.bound) {
-    dismissBtn.dataset.bound = "1";
-    dismissBtn.addEventListener("click", () => {
-      const box = document.getElementById("applyProgress");
-      if (box) box.hidden = true;
-    });
-  }
+  bindImportDoneActions();
 
   stopApplyPoll();
   if (applyBtn) {
     applyBtn.disabled = true;
     applyBtn.textContent = "Updating…";
+  }
+  const progressBox = document.getElementById("applyProgress");
+  if (progressBox) {
+    progressBox.classList.remove("is-done", "is-error");
   }
   paintApplyProgress({
     status: "queued",
@@ -2116,15 +2349,41 @@ async function runPassApplyWithProgress({
         (failed ? ` · failed: ${failed}` : "") +
         (cfErr ? ` · ${cfErr}` : "");
       showToast(msg, failed || cfErr ? "warn" : "ok", 6500);
-      const execKey = resolveImportExecution() || currentExecutionKey();
-      refreshExecutionSummary(execKey).then(() => {
-        showToast("Summary refreshed. Use Refresh on Plan/Execution for full case list.", "info", 5000);
-      });
+      const execKey =
+        execution || resolveImportExecution() || currentExecutionKey();
+      refreshUiAfterPassApply(execKey)
+        .then((summary) => {
+          const passBit =
+            summary && summary.passed != null
+              ? ` · now ${summary.passed} PASS / ${summary.todo ?? 0} TODO / ${summary.total ?? 0} total`
+              : "";
+          showImportDoneState({
+            updated,
+            failed,
+            execution: execKey,
+            message:
+              msg +
+              passBit +
+              ". Status overview refreshed. Upload more when ready.",
+            summary,
+          });
+          showToast("UI refreshed with latest Xray statuses.", "ok", 4000);
+        })
+        .catch(() => {
+          showImportDoneState({
+            updated,
+            failed,
+            execution: execKey,
+            message: msg + " Choose new files when you want another import.",
+          });
+        });
       if (applyBtn) {
-        applyBtn.disabled = false;
+        applyBtn.disabled = true;
         applyBtn.textContent = "Submit PASS";
       }
-      if (syncApply) syncApply();
+      if (setStatus) {
+        setStatus("Done — UI refreshed. Upload more files when ready.");
+      }
       resolve(job);
     };
 
@@ -2423,7 +2682,6 @@ function bindHtmlPassImportPanel(cfg) {
   const technology = panel.dataset.technology || "";
   const previewBtn = document.getElementById(cfg.previewBtnId);
   const applyBtn = document.getElementById(cfg.applyBtnId);
-  const pathEl = cfg.pathElId ? document.getElementById(cfg.pathElId) : null;
   const filesEl = cfg.filesElId ? document.getElementById(cfg.filesElId) : null;
   const folderEl = cfg.folderElId
     ? document.getElementById(cfg.folderElId)
@@ -2437,20 +2695,18 @@ function bindHtmlPassImportPanel(cfg) {
   const selectAllEl = document.getElementById(cfg.selectAllElId);
   const pagerEl = document.getElementById(cfg.pagerElId);
   const checkClass = cfg.checkClass || "html-import-check";
-  const emptyMsg =
-    cfg.emptyMsg ||
-    "Select HTML file(s), or use Import Folder / Import ZIP.";
+  const emptyMsg = cfg.emptyMsg || "Select HTML file(s) to upload.";
 
   if (!previewBtn) return;
 
   const hintBase = hintEl ? hintEl.innerHTML : "";
+  if (hintEl) hintEl.dataset.hintBase = hintBase;
 
   function refreshUploadHint() {
     if (!hintEl) return;
     const folderCount = folderEl && folderEl.files ? folderEl.files.length : 0;
     const files = collectHtmlUploadFiles(filesEl, folderEl);
-    const pathVal = pathEl ? pathEl.value.trim() : "";
-    const bits = [hintBase];
+    const bits = [hintEl.dataset.hintBase || hintBase];
     if (folderCount) {
       bits.push(`Folder picker: <strong>${folderCount}</strong> item(s)`);
     }
@@ -2468,13 +2724,11 @@ function bindHtmlPassImportPanel(cfg) {
         `<span class="alert-error-inline">No .htm/.html files detected in folder</span>`
       );
     }
-    if (pathVal) bits.push(`Server path set`);
     hintEl.innerHTML = bits.join(" · ");
   }
 
   if (filesEl) filesEl.addEventListener("change", refreshUploadHint);
   if (folderEl) folderEl.addEventListener("change", refreshUploadHint);
-  if (pathEl) pathEl.addEventListener("input", refreshUploadHint);
   refreshUploadHint();
 
   let lastMatches = [];
@@ -2618,16 +2872,15 @@ function bindHtmlPassImportPanel(cfg) {
       setStatus("Select a Test Execution.", true);
       return;
     }
+    hideImportDoneState();
     const form = new FormData();
     form.append("execution", execution);
     form.append("technology", technology);
     form.append("only_changed", "1");
-    const pathVal = pathEl ? pathEl.value.trim() : "";
-    if (pathVal) form.append("folder_path", pathVal);
     const folderCount = folderEl && folderEl.files ? folderEl.files.length : 0;
     const uploadFiles = collectHtmlUploadFiles(filesEl, folderEl);
     uploadFiles.forEach((f) => form.append("files", f, htmlUploadFileName(f)));
-    if (!pathVal && !uploadFiles.length) {
+    if (!uploadFiles.length) {
       setStatus(
         folderCount
           ? `Folder has ${folderCount} item(s) but no .htm/.html files were found.`
@@ -2639,17 +2892,13 @@ function bindHtmlPassImportPanel(cfg) {
 
     if (uploadFiles.length > 40) {
       setStatus(
-        `Uploading ${uploadFiles.length} HTML files can exceed server limits. Prefer Import ZIP or a server folder path.`,
+        `Uploading ${uploadFiles.length} HTML files can exceed server limits. Prefer Import ZIP for large folders.`,
         true
       );
     }
     previewBtn.disabled = true;
     previewBtn.textContent = "Parsing…";
-    setStatus(
-      uploadFiles.length
-        ? `Uploading/parsing ${uploadFiles.length} file(s)…`
-        : "Parsing HTML from server path…"
-    );
+    setStatus(`Uploading/parsing ${uploadFiles.length} file(s)…`);
     try {
       const resp = await fetch("/api/html-import/preview/", {
         method: "POST",
@@ -2751,7 +3000,6 @@ function initFolderImport() {
     panelId: "folderImportPanel",
     previewBtnId: "folderPreviewBtn",
     applyBtnId: "folderApplyBtn",
-    pathElId: "folderServerPath",
     folderElId: "folderUploadFolder",
     hintElId: "folderUploadHint",
     statusElId: "folderImportStatus",
@@ -2762,7 +3010,7 @@ function initFolderImport() {
     selectAllElId: "folderSelectAll",
     pagerElId: "folderImportPager",
     checkClass: "folder-import-check",
-    emptyMsg: "Select a folder of HTML reports, or enter a server path.",
+    emptyMsg: "Select a folder of HTML reports.",
   });
 }
 
@@ -2840,12 +3088,13 @@ function initZipImport() {
   if (!previewBtn) return;
 
   const hintBase = hintEl ? hintEl.innerHTML : "";
+  if (hintEl) hintEl.dataset.hintBase = hintBase;
 
   function refreshUploadHint() {
     if (!hintEl) return;
     const folderCount = folderEl && folderEl.files ? folderEl.files.length : 0;
     const files = collectZipUploadFiles(filesEl, folderEl);
-    const bits = [hintBase];
+    const bits = [hintEl.dataset.hintBase || hintBase];
     if (folderCount) {
       bits.push(`Folder picker: <strong>${folderCount}</strong> item(s)`);
     }
@@ -3021,6 +3270,7 @@ function initZipImport() {
       setStatus("Select a Test Execution.", true);
       return;
     }
+    hideImportDoneState();
     const folderCount = folderEl && folderEl.files ? folderEl.files.length : 0;
     const uploadFiles = collectZipUploadFiles(filesEl, folderEl);
     if (!uploadFiles.length) {
@@ -3264,6 +3514,7 @@ function initExcelImport() {
       setStatus("Select a Test Execution.", true);
       return;
     }
+    hideImportDoneState();
     if (!(filesEl && filesEl.files && filesEl.files.length)) {
       setStatus("Upload an Excel (.xlsx) report.", true);
       return;
@@ -3891,5 +4142,6 @@ document.addEventListener("DOMContentLoaded", () => {
   initZipImport();
   initExcelImport();
   initFailureTriage();
+  bindImportDoneActions();
   initPlanExcelExport();
 });

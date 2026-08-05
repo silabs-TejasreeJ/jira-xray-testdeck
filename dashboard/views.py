@@ -703,9 +703,28 @@ def results_update(request):
                 "mapped_ids": cached.get("mapped_ids", 0),
                 "discovered_from": cached.get("discovered_from") or [],
             }
+        if execution_key:
+            cases = service.load_execution_cases(execution_key, technology=tech)
+            overall = service._summarize_statuses(cases)
+            context["overall_summary"] = (
+                overall.to_dict() if hasattr(overall, "to_dict") else overall
+            )
+            context["overall_summary_json"] = json.dumps(context["overall_summary"])
     except JiraError as exc:
         context.update(_error_context(exc))
         context["executions"] = []
+    if "overall_summary" not in context:
+        context["overall_summary"] = {
+            "counts": {},
+            "total": 0,
+            "passed": 0,
+            "failed": 0,
+            "todo": 0,
+            "pass_pct": 0,
+            "todo_pct": 0,
+            "chart": [],
+        }
+        context["overall_summary_json"] = json.dumps(context["overall_summary"])
     return render(request, "dashboard/results_update.html", context)
 
 
@@ -886,10 +905,16 @@ def api_execution_summary(request, key: str):
     """Lightweight overall status summary for pie/chip refresh without full page reload."""
     service = get_service()
     tech = _tech(request)
+    force_refresh = request.GET.get("refresh") == "1"
     try:
-        cases = service.load_execution_cases(key, technology=tech)
+        if force_refresh:
+            service._bust_execution_case_cache(key)
+        cases = service.load_execution_cases(
+            key, technology=tech, force_refresh=force_refresh
+        )
         overall = service._summarize_statuses(cases)
-        return JsonResponse({"overall_summary": overall, "execution": key})
+        payload = overall.to_dict() if hasattr(overall, "to_dict") else overall
+        return JsonResponse({"overall_summary": payload, "execution": key})
     except JiraError as exc:
         return JsonResponse(_error_context(exc), status=exc.status_code or 502)
     except Exception as exc:  # noqa: BLE001

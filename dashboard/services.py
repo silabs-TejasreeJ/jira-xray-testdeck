@@ -926,6 +926,19 @@ class DashboardService:
     def _bust_execution_case_cache(self, execution_key: str) -> None:
         if not execution_key:
             return
+        from .cache_utils import bust_prefix
+
+        for prefix in (
+            "exec_cases:",
+            "exec_cases_v2:",
+            "exec_cases_v3:",
+            "exec_cases_v4:",
+            "exec_cases_v5:",
+            "exec_cases_v6:",
+            "exec_cases_v7:",
+        ):
+            bust_prefix(f"{prefix}{execution_key}:")
+        # Also clear common tech-key variants if they were never registered.
         for tech in {settings.DEFAULT_TECHNOLOGY, "", "ALL", "WLAN + BLE"}:
             tech_key = (tech or "ALL").replace(" ", "_").replace("+", "plus")
             for prefix in (

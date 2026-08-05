@@ -52,7 +52,7 @@ Automation produces pytest HTML reports. Mapping results into Xray by hand was e
 - Dedicated **Results Update** page (not mixed into Plan View)
 - Separate import tabs (no overlapping pickers):
   - **Import HTML** — multi-select HTML files
-  - **Import Folder** — folder of HTML (browser) and/or server path
+  - **Import Folder** — folder of HTML (browser upload)
   - **Import ZIP** — multi-select ZIP archives
   - **Import Excel** — OverAllStatus workbook
 - Map via `test_src_map_id` / case id; **PASS only** written to Xray; FAIL skipped; already-PASS left untouched
