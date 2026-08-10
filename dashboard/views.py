@@ -213,6 +213,27 @@ def _release(request) -> str:
     return ""
 
 
+def _case_filters(request) -> dict:
+    """Parse All Tests filter query params (status/search/assignee/linked/priority)."""
+    assignees = [a.strip() for a in request.GET.getlist("assignee") if a and a.strip()]
+    if not assignees:
+        raw = (request.GET.get("assignees") or "").strip()
+        if raw:
+            assignees = [p.strip() for p in raw.split(",") if p.strip()]
+    priorities = [p.strip() for p in request.GET.getlist("priority") if p and p.strip()]
+    if not priorities:
+        raw_p = (request.GET.get("priorities") or "").strip()
+        if raw_p:
+            priorities = [p.strip() for p in raw_p.split(",") if p.strip()]
+    return {
+        "status": (request.GET.get("status") or "").strip(),
+        "search": (request.GET.get("search") or "").strip(),
+        "assignees": assignees,
+        "linked_jira": (request.GET.get("linked_jira") or "").strip(),
+        "priorities": priorities,
+    }
+
+
 def _redirect_with_params(path: str, **params: str):
     clean = {k: v for k, v in params.items() if v is not None and v != ""}
     return redirect(f"{path}?{urlencode(clean)}")
@@ -348,8 +369,7 @@ def executions(request):
 def execution_detail(request, key: str):
     service = get_service()
     section = request.GET.get("section", "")
-    status = request.GET.get("status", "")
-    search = request.GET.get("search", "")
+    case_filters = _case_filters(request)
     tech = _tech(request)
     page = int(request.GET.get("page") or 1)
     force_refresh = request.GET.get("refresh") == "1"
@@ -364,11 +384,14 @@ def execution_detail(request, key: str):
         data = service.get_execution_dashboard(
             execution_key=key,
             section_path=section,
-            status_filter=status,
-            search=search,
+            status_filter=case_filters["status"],
+            search=case_filters["search"],
             technology=tech,
             page=page,
             force_refresh=force_refresh,
+            assignees=case_filters["assignees"],
+            linked_jira=case_filters["linked_jira"],
+            priorities=case_filters["priorities"],
         )
         context.update(data)
         context["summary_json"] = json.dumps(data["summary"])
@@ -381,8 +404,11 @@ def execution_detail(request, key: str):
         context["case_columns"] = EXECUTION_CASE_COLUMNS
         if request.GET.get("partial") == "cases":
             return render(request, "dashboard/_cases_partial.html", context)
-    except JiraError as exc:
-        context.update(_error_context(exc))
+    except Exception as exc:
+        if isinstance(exc, JiraError):
+            context.update(_error_context(exc))
+        else:
+            context["error"] = f"{type(exc).__name__}: {exc}"
         context.update(
             {
                 "execution": {
@@ -417,7 +443,20 @@ def execution_detail(request, key: str):
                     "showing_to": 0,
                 },
                 "editable_statuses": ["TODO", "PASS", "FAIL", "BLOCKED", "EXECUTING", "ABORTED", "NA"],
-                "filters": {"status": status, "search": search, "technology": tech},
+                "filters": {
+                    "status": case_filters["status"],
+                    "search": case_filters["search"],
+                    "technology": tech,
+                    "assignees": case_filters["assignees"],
+                    "linked_jira": case_filters["linked_jira"],
+                    "priorities": case_filters["priorities"],
+                    "qs": "",
+                },
+                "filter_options": {
+                    "assignees": [],
+                    "has_unassigned": False,
+                    "priorities": [],
+                },
                 "summary_json": "{}",
                 "overall_summary": {
                     "counts": {},
@@ -436,6 +475,9 @@ def execution_detail(request, key: str):
         )
     context["case_columns"] = EXECUTION_CASE_COLUMNS
     context["enable_status_filters"] = True
+    # Partial nav must always get the fragment — never a full page HTML shell.
+    if request.GET.get("partial") == "cases":
+        return render(request, "dashboard/_cases_partial.html", context)
     return render(request, "dashboard/execution.html", context)
 
 
@@ -529,8 +571,7 @@ def plan_home(request):
 def plan_detail(request, key: str):
     service = get_service()
     section = request.GET.get("section", "")
-    status = request.GET.get("status", "")
-    search = request.GET.get("search", "")
+    case_filters = _case_filters(request)
     tech = _tech(request)
     stack = _stack(request)
     release = _release(request)
@@ -562,13 +603,18 @@ def plan_detail(request, key: str):
         data = service.get_test_plan_dashboard(
             plan_key=key,
             section_path=section,
-            status_filter=status,
-            search=search,
+            status_filter=case_filters["status"],
+            search=case_filters["search"],
             technology=tech,
             execution_key=execution_key,
             page=page,
             force_refresh=force_refresh,
             include_execution_list=False,
+            assignees=case_filters["assignees"],
+            linked_jira=case_filters["linked_jira"],
+            priorities=case_filters["priorities"],
+            stack_name=stack,
+            release_name=release,
         )
         context.update(data)
         context.setdefault("selected_execution", execution_key)
@@ -634,9 +680,18 @@ def plan_detail(request, key: str):
                 },
                 "editable_statuses": ["TODO", "PASS", "FAIL", "BLOCKED"],
                 "filters": {
-                    "status": status,
-                    "search": search,
+                    "status": case_filters["status"],
+                    "search": case_filters["search"],
                     "technology": tech,
+                    "assignees": case_filters["assignees"],
+                    "linked_jira": case_filters["linked_jira"],
+                    "priorities": case_filters["priorities"],
+                    "qs": "",
+                },
+                "filter_options": {
+                    "assignees": [],
+                    "has_unassigned": False,
+                    "priorities": [],
                 },
                 "summary_json": "{}",
                 "overall_summary_json": "{}",
@@ -645,6 +700,9 @@ def plan_detail(request, key: str):
         )
     context["case_columns"] = PLAN_CASE_COLUMNS
     context["enable_status_filters"] = True
+    # Partial nav must always get the fragment — never a full page HTML shell.
+    if request.GET.get("partial") == "cases":
+        return render(request, "dashboard/_cases_partial.html", context)
     return render(request, "dashboard/plan.html", context)
 
 
@@ -887,13 +945,17 @@ def defects(request):
 @require_GET
 def api_execution(request, key: str):
     service = get_service()
+    case_filters = _case_filters(request)
     try:
         data = service.get_execution_dashboard(
             execution_key=key,
             section_path=request.GET.get("section", ""),
-            status_filter=request.GET.get("status", ""),
-            search=request.GET.get("search", ""),
+            status_filter=case_filters["status"],
+            search=case_filters["search"],
             technology=_tech(request),
+            assignees=case_filters["assignees"],
+            linked_jira=case_filters["linked_jira"],
+            priorities=case_filters["priorities"],
         )
         return JsonResponse(data)
     except JiraError as exc:
@@ -924,14 +986,20 @@ def api_execution_summary(request, key: str):
 @require_GET
 def api_plan(request, key: str):
     service = get_service()
+    case_filters = _case_filters(request)
     try:
         data = service.get_test_plan_dashboard(
             plan_key=key,
             section_path=request.GET.get("section", ""),
-            status_filter=request.GET.get("status", ""),
-            search=request.GET.get("search", ""),
+            status_filter=case_filters["status"],
+            search=case_filters["search"],
             technology=_tech(request),
             execution_key=request.GET.get("execution", ""),
+            assignees=case_filters["assignees"],
+            linked_jira=case_filters["linked_jira"],
+            priorities=case_filters["priorities"],
+            stack_name=_stack(request),
+            release_name=_release(request),
         )
         return JsonResponse(data)
     except JiraError as exc:
@@ -1375,8 +1443,7 @@ def export_execution_xlsx(request, key: str):
     """Download the selected Test Execution as an Excel workbook."""
     service = get_service()
     section = request.GET.get("section", "")
-    status = request.GET.get("status", "")
-    search = request.GET.get("search", "")
+    case_filters = _case_filters(request)
     # Full run by default; pass technology=... only when explicitly requested.
     tech = (request.GET.get("technology") or "").strip()
     if request.GET.get("all") in {"1", "true", "yes"}:
@@ -1387,11 +1454,14 @@ def export_execution_xlsx(request, key: str):
         data = service.export_execution_xlsx(
             execution_key=key,
             section_path=section,
-            status_filter=status,
-            search=search,
+            status_filter=case_filters["status"],
+            search=case_filters["search"],
             technology=tech,
             force_refresh=force_refresh,
             include_steps=include_steps,
+            assignees=case_filters["assignees"],
+            linked_jira=case_filters["linked_jira"],
+            priorities=case_filters["priorities"],
         )
     except JiraError as exc:
         return JsonResponse(_error_context(exc), status=exc.status_code or 400)

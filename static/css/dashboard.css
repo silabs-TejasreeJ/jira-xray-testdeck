@@ -576,6 +576,7 @@ table.data.case-table tbody td {
 .cases-filter .cases-status,
 .cases-filter .cases-search,
 .cases-filter .btn-compact,
+.cases-filter .cases-filter-summary,
 .cases-chrome .btn-compact {
   height: 34px;
   box-sizing: border-box;
@@ -606,6 +607,67 @@ table.data.case-table tbody td {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+.cases-filter-dropdown {
+  position: relative;
+}
+.cases-filter-summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  background: #fff;
+  white-space: nowrap;
+}
+.cases-filter-summary::-webkit-details-marker {
+  display: none;
+}
+.cases-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #1f4e79;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.cases-filter-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  max-width: 320px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 6px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.cases-filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cases-filter-option:hover {
+  background: #f3f6f9;
+}
+.cases-filter-option input {
+  margin: 0;
 }
 .cases-chrome-meta {
   display: flex;

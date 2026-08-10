@@ -1,9 +1,10 @@
+{% firstof filters.base_qs filters.qs "" as base_qs %}
 {% for node in nodes %}
   {% if node.children %}
     <details open>
       <summary>{{ node.name }} <span class="count">{{ node.count }}</span></summary>
       <div class="tree">
-        <a href="?{% if query_param %}{{ query_param }}{% else %}section{% endif %}={{ node.path|urlencode }}{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.search %}&search={{ filters.search|urlencode }}{% endif %}"
+        <a href="?section={{ node.path|urlencode }}{% if base_qs %}&{{ base_qs }}{% else %}{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}{% endif %}"
            class="{% if section_path == node.path %}active{% endif %}">
           <span>View all in {{ node.name }}</span>
           <span class="count">{{ node.count }}</span>
@@ -12,7 +13,7 @@
       </div>
     </details>
   {% else %}
-    <a href="?{% if query_param %}{{ query_param }}{% else %}section{% endif %}={{ node.path|urlencode }}{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.search %}&search={{ filters.search|urlencode }}{% endif %}"
+    <a href="?section={{ node.path|urlencode }}{% if base_qs %}&{{ base_qs }}{% else %}{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}{% endif %}"
        class="{% if section_path == node.path %}active{% endif %}">
       <span>{{ node.name }}</span>
       <span class="count">{{ node.count }}</span>

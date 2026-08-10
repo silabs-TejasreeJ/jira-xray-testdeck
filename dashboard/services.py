@@ -3082,9 +3082,15 @@ class DashboardService:
         technology: str | None = None,
         page: int = 1,
         force_refresh: bool = False,
+        assignees: list[str] | str | None = None,
+        linked_jira: str = "",
+        priorities: list[str] | str | None = None,
     ) -> dict[str, Any]:
         field_map = self.resolve_fields()
         technology = technology if technology is not None else settings.DEFAULT_TECHNOLOGY
+        assignee_filters = self._normalize_assignee_filters(assignees)
+        priority_filters = self._normalize_priority_filters(priorities)
+        linked_filter = self._normalize_linked_jira_filter(linked_jira)
 
         exec_fields_key = f"exec_issue:{execution_key}"
         execution = cache.get(exec_fields_key)
@@ -3112,15 +3118,53 @@ class DashboardService:
         cases = self.load_execution_cases(
             execution_key, technology=technology, force_refresh=force_refresh
         )
+        facet_options = self._case_filter_facet_options(cases)
 
-        # Sidebar tree respects status/search so empty sections are hidden.
-        tree_cases = self._filter_cases(cases, "", status_filter, search)
+        # Sidebar tree respects active filters so empty sections are hidden.
+        tree_cases = self._filter_cases(
+            cases,
+            "",
+            status_filter,
+            search,
+            assignees=assignee_filters,
+            linked_jira=linked_filter,
+            priorities=priority_filters,
+        )
         section_tree = self._build_section_tree(tree_cases)
-        filtered = self._filter_cases(cases, section_path, status_filter, search)
+        filtered = self._filter_cases(
+            cases,
+            section_path,
+            status_filter,
+            search,
+            assignees=assignee_filters,
+            linked_jira=linked_filter,
+            priorities=priority_filters,
+        )
         summary = self._summarize_statuses(filtered)
         overall = self._summarize_statuses(cases)
         paging = self.paginate_cases(filtered, page=page)
         coverage = self._build_coverage(filtered)
+        filter_common = dict(
+            technology=technology or "",
+            status=status_filter,
+            search=search,
+            assignees=assignee_filters,
+            linked_jira=linked_filter,
+            priorities=priority_filters,
+        )
+        filters = {
+            "status": status_filter,
+            "search": search,
+            "technology": technology or "",
+            "assignees": assignee_filters,
+            "linked_jira": linked_filter,
+            "priorities": priority_filters,
+            "base_qs": self._filters_querystring(**filter_common),
+            "qs": self._filters_querystring(
+                **filter_common,
+                section_path=section_path,
+            ),
+        }
 
         return {
             "execution": {
@@ -3156,11 +3200,8 @@ class DashboardService:
             "defects": [],
             "coverage": coverage,
             "editable_statuses": EDITABLE_STATUSES,
-            "filters": {
-                "status": status_filter,
-                "search": search,
-                "technology": technology or "",
-            },
+            "filters": filters,
+            "filter_options": facet_options,
             "status_colors": STATUS_COLORS,
             "technology": technology or "",
         }
@@ -3176,6 +3217,11 @@ class DashboardService:
         page: int = 1,
         force_refresh: bool = False,
         include_execution_list: bool = True,
+        assignees: list[str] | str | None = None,
+        linked_jira: str = "",
+        priorities: list[str] | str | None = None,
+        stack_name: str = "",
+        release_name: str = "",
     ) -> dict[str, Any]:
         """
         TestRail-style plan view:
@@ -3319,14 +3365,59 @@ class DashboardService:
                     }
                 )
 
-        # Sidebar tree respects status/search so empty sections are hidden.
-        tree_cases = self._filter_cases(cases, "", status_filter, search)
+        assignee_filters = self._normalize_assignee_filters(assignees)
+        priority_filters = self._normalize_priority_filters(priorities)
+        linked_filter = self._normalize_linked_jira_filter(linked_jira)
+        facet_options = self._case_filter_facet_options(cases)
+
+        # Sidebar tree respects active filters so empty sections are hidden.
+        tree_cases = self._filter_cases(
+            cases,
+            "",
+            status_filter,
+            search,
+            assignees=assignee_filters,
+            linked_jira=linked_filter,
+            priorities=priority_filters,
+        )
         section_tree = self._build_section_tree(tree_cases)
-        filtered = self._filter_cases(cases, section_path, status_filter, search)
+        filtered = self._filter_cases(
+            cases,
+            section_path,
+            status_filter,
+            search,
+            assignees=assignee_filters,
+            linked_jira=linked_filter,
+            priorities=priority_filters,
+        )
         summary = self._summarize_statuses(filtered)
         overall = self._summarize_statuses(cases)
         paging = self.paginate_cases(filtered, page=page)
         coverage = self._build_coverage(filtered)
+        filter_common = dict(
+            technology=technology or "",
+            status=status_filter,
+            search=search,
+            assignees=assignee_filters,
+            linked_jira=linked_filter,
+            priorities=priority_filters,
+            stack=stack_name or "",
+            release=release_name or "",
+            execution=execution_key or "",
+        )
+        filters = {
+            "status": status_filter,
+            "search": search,
+            "technology": technology or "",
+            "assignees": assignee_filters,
+            "linked_jira": linked_filter,
+            "priorities": priority_filters,
+            "base_qs": self._filters_querystring(**filter_common),
+            "qs": self._filters_querystring(
+                **filter_common,
+                section_path=section_path,
+            ),
+        }
 
         return {
             "plan": {
@@ -3370,11 +3461,8 @@ class DashboardService:
             "defects": [],
             "coverage": coverage,
             "editable_statuses": EDITABLE_STATUSES,
-            "filters": {
-                "status": status_filter,
-                "search": search,
-                "technology": technology or "",
-            },
+            "filters": filters,
+            "filter_options": facet_options,
             "technology": technology or "",
             "status_colors": STATUS_COLORS,
         }
@@ -3663,16 +3751,157 @@ class DashboardService:
             for name, payload in sorted(tree.items())
         ]
 
+    UNASSIGNED_FILTER = "__unassigned__"
+
+    @classmethod
+    def _normalize_assignee_filters(cls, assignees: list[str] | str | None) -> list[str]:
+        if assignees is None:
+            return []
+        if isinstance(assignees, str):
+            raw = [p.strip() for p in assignees.split(",")]
+        else:
+            raw = []
+            for item in assignees:
+                text = str(item or "").strip()
+                if not text:
+                    continue
+                if "," in text and text != cls.UNASSIGNED_FILTER:
+                    raw.extend(p.strip() for p in text.split(","))
+                else:
+                    raw.append(text)
+        out: list[str] = []
+        seen: set[str] = set()
+        for name in raw:
+            if not name:
+                continue
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(name)
+        return out
+
+    @classmethod
+    def _normalize_priority_filters(cls, priorities: list[str] | str | None) -> list[str]:
+        if priorities is None:
+            return []
+        if isinstance(priorities, str):
+            raw = [p.strip() for p in priorities.split(",") if p.strip()]
+        else:
+            raw = [str(p).strip() for p in priorities if str(p or "").strip()]
+        out: list[str] = []
+        seen: set[str] = set()
+        for name in raw:
+            key = name.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(name)
+        return out
+
+    @staticmethod
+    def _normalize_linked_jira_filter(value: str | None) -> str:
+        raw = (value or "").strip().lower()
+        if raw in {"yes", "y", "1", "true", "has", "linked"}:
+            return "yes"
+        if raw in {"no", "n", "0", "false", "none", "unlinked"}:
+            return "no"
+        return ""
+
+    def _case_filter_facet_options(
+        self, cases: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Unique assignees/priorities from the current case set (for filter UI)."""
+        assignees: list[str] = []
+        seen_a: set[str] = set()
+        has_unassigned = False
+        priorities: list[str] = []
+        seen_p: set[str] = set()
+        for case in cases:
+            name = (case.get("assignee") or "").strip()
+            if not name:
+                has_unassigned = True
+            else:
+                key = name.lower()
+                if key not in seen_a:
+                    seen_a.add(key)
+                    assignees.append(name)
+            pri = (case.get("priority") or "").strip()
+            if pri:
+                pkey = pri.lower()
+                if pkey not in seen_p:
+                    seen_p.add(pkey)
+                    priorities.append(pri)
+        assignees.sort(key=lambda s: s.lower())
+        priorities.sort(key=lambda s: s.lower())
+        return {
+            "assignees": assignees,
+            "has_unassigned": has_unassigned,
+            "priorities": priorities,
+        }
+
+    @staticmethod
+    def _filters_querystring(
+        *,
+        technology: str = "",
+        status: str = "",
+        search: str = "",
+        assignees: list[str] | None = None,
+        linked_jira: str = "",
+        priorities: list[str] | None = None,
+        stack: str = "",
+        release: str = "",
+        execution: str = "",
+        section_path: str = "",
+    ) -> str:
+        from urllib.parse import urlencode
+
+        pairs: list[tuple[str, str]] = []
+        if technology:
+            pairs.append(("technology", technology))
+        if stack:
+            pairs.append(("stack", stack))
+        if release:
+            pairs.append(("release", release))
+        if execution:
+            pairs.append(("execution", execution))
+        if section_path:
+            pairs.append(("section", section_path))
+        if status:
+            pairs.append(("status", status))
+        if search:
+            pairs.append(("search", search))
+        for name in assignees or []:
+            if name:
+                pairs.append(("assignee", name))
+        if linked_jira:
+            pairs.append(("linked_jira", linked_jira))
+        for pri in priorities or []:
+            if pri:
+                pairs.append(("priority", pri))
+        return urlencode(pairs)
+
     def _filter_cases(
         self,
         cases: list[dict[str, Any]],
         section_path: str,
         status_filter: str,
         search: str,
+        *,
+        assignees: list[str] | str | None = None,
+        linked_jira: str = "",
+        priorities: list[str] | str | None = None,
     ) -> list[dict[str, Any]]:
         section_path = self._clean_path(section_path)
         status_filter = (status_filter or "").strip().upper()
         search = (search or "").strip().lower()
+        wanted_assignees = {
+            a.lower() for a in self._normalize_assignee_filters(assignees)
+        }
+        wanted_priorities = {
+            p.lower() for p in self._normalize_priority_filters(priorities)
+        }
+        linked_mode = self._normalize_linked_jira_filter(linked_jira)
 
         result = []
         for case in cases:
@@ -3682,8 +3911,35 @@ class DashboardService:
             if status_filter and status_filter != "ALL" and case.get("status") != status_filter:
                 continue
             if search:
-                blob = f"{case.get('key','')} {case.get('summary','')}".lower()
+                blob = (
+                    f"{case.get('key', '')} {case.get('summary', '')} "
+                    f"{case.get('test_src_map_id', '')} {case.get('case_id', '')} "
+                    f"{case.get('assignee', '')}"
+                ).lower()
                 if search not in blob:
+                    continue
+            if wanted_assignees:
+                name = (case.get("assignee") or "").strip()
+                key = (case.get("assignee_key") or "").strip()
+                is_unassigned = not name and not key
+                match = False
+                if self.UNASSIGNED_FILTER.lower() in wanted_assignees and is_unassigned:
+                    match = True
+                if name and name.lower() in wanted_assignees:
+                    match = True
+                if key and key.lower() in wanted_assignees:
+                    match = True
+                if not match:
+                    continue
+            if wanted_priorities:
+                pri = (case.get("priority") or "").strip().lower()
+                if pri not in wanted_priorities:
+                    continue
+            if linked_mode:
+                has_link = bool(self._defect_keys(case.get("defects")))
+                if linked_mode == "yes" and not has_link:
+                    continue
+                if linked_mode == "no" and has_link:
                     continue
             result.append(case)
         return result
@@ -4589,17 +4845,31 @@ class DashboardService:
         force_refresh: bool = False,
         include_steps: bool = True,
         execution_summary: str = "",
+        assignees: list[str] | str | None = None,
+        linked_jira: str = "",
+        priorities: list[str] | str | None = None,
     ) -> bytes:
         """Build an .xlsx workbook of cases for a Test Execution (optional filters)."""
         if not execution_key:
             raise JiraError("execution is required")
 
         technology = technology if technology is not None else ""
+        assignee_filters = self._normalize_assignee_filters(assignees)
+        priority_filters = self._normalize_priority_filters(priorities)
+        linked_filter = self._normalize_linked_jira_filter(linked_jira)
         exec_summary = execution_summary or self._execution_summary(execution_key)
         cases = self.load_execution_cases(
             execution_key, technology=technology, force_refresh=force_refresh
         )
-        filtered = self._filter_cases(cases, section_path, status_filter, search)
+        filtered = self._filter_cases(
+            cases,
+            section_path,
+            status_filter,
+            search,
+            assignees=assignee_filters,
+            linked_jira=linked_filter,
+            priorities=priority_filters,
+        )
         case_entries = [
             {
                 "case": case,
@@ -4616,6 +4886,9 @@ class DashboardService:
                 ["Technology filter", technology or "(all)"],
                 ["Section", section_path or "(all)"],
                 ["Status filter", status_filter or "(all)"],
+                ["Assignee filter", ", ".join(assignee_filters) or "(all)"],
+                ["Linked Jira filter", linked_filter or "(all)"],
+                ["Priority filter", ", ".join(priority_filters) or "(all)"],
                 ["Search", search or ""],
                 ["Total in run (after tech filter)", len(cases)],
             ],

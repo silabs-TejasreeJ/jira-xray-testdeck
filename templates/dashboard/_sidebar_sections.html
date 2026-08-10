@@ -1,13 +1,14 @@
 {# Section tree for Plan / Execution sidebars #}
+{% firstof filters.base_qs filters.qs "" as base_qs %}
 <div class="tree" id="sectionTreeInner" data-partial-nav>
   {% if view_mode == "plan" %}
-    <a href="?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.search %}&search={{ filters.search|urlencode }}{% endif %}"
+    <a href="?{% if base_qs %}{{ base_qs }}{% else %}technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}{% endif %}"
        class="{% if not section_path %}active{% endif %}">
       <span>All Tests</span>
       <span class="count">{{ total_cases }}</span>
     </a>
   {% else %}
-    <a href="{% url 'execution_detail' execution.key %}?technology={{ technology|urlencode }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.search %}&search={{ filters.search|urlencode }}{% endif %}"
+    <a href="{% url 'execution_detail' execution.key %}?{% if base_qs %}{{ base_qs }}{% else %}technology={{ technology|urlencode }}{% endif %}"
        class="{% if not section_path %}active{% endif %}">
       <span>All Tests</span>
       <span class="count">{{ total_cases }}</span>

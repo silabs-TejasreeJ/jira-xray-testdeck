@@ -729,12 +729,25 @@ async function loadCasesPartial(url, { push = true } = {}) {
   try {
     const resp = await fetch(withPartialParam(url), {
       headers: { "X-Requested-With": "XMLHttpRequest" },
+      credentials: "same-origin",
     });
-    if (!resp.ok) throw new Error(`Failed to load cases (HTTP ${resp.status})`);
+    // Auth/login redirects or hard failures: full navigate without a scary toast.
+    if (resp.redirected || resp.status === 401 || resp.status === 403) {
+      window.location.href = url;
+      return;
+    }
+    if (!resp.ok) {
+      window.location.href = url;
+      return;
+    }
     const html = await resp.text();
     const doc = new DOMParser().parseFromString(html, "text/html");
     const payload = doc.getElementById("partial-payload");
-    if (!payload) throw new Error("Unexpected partial response");
+    if (!payload) {
+      // Server returned a full page (or error HTML). Reload quietly.
+      window.location.href = url;
+      return;
+    }
 
     const sideSrc = payload.querySelector("#partial-sidebar-tree");
     const sideDst = document.getElementById("sectionTreePanel");
@@ -769,8 +782,8 @@ async function loadCasesPartial(url, { push = true } = {}) {
     bindCaseTableHandlers(panel);
     initPartialNavigation();
     rememberPlanContext();
-  } catch (err) {
-    showToast(err.message || "Unable to update cases", "error");
+  } catch (_err) {
+    // Network/parse issues — fall back to a normal navigation, no error toast.
     window.location.href = url;
   } finally {
     panel.classList.remove("partial-loading");
@@ -825,14 +838,30 @@ function initPartialNavigation() {
     });
   }
 
-  const statusSel = document.getElementById("casesStatusFilter");
-  if (statusSel && !statusSel.dataset.autoBound) {
-    statusSel.dataset.autoBound = "1";
-    statusSel.addEventListener("change", () => {
-      const f = document.getElementById("casesFilterForm");
-      if (!f) return;
-      if (typeof f.requestSubmit === "function") f.requestSubmit();
-      else f.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+  const submitCasesFilter = () => {
+    const f = document.getElementById("casesFilterForm");
+    if (!f) return;
+    if (typeof f.requestSubmit === "function") f.requestSubmit();
+    else f.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+  };
+
+  ["casesStatusFilter", "casesLinkedJiraFilter"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.autoBound) return;
+    el.dataset.autoBound = "1";
+    el.addEventListener("change", submitCasesFilter);
+  });
+
+  const formEl = document.getElementById("casesFilterForm");
+  if (formEl && !formEl.dataset.filterChecksBound) {
+    formEl.dataset.filterChecksBound = "1";
+    let checkTimer = null;
+    formEl.querySelectorAll("[data-filter-auto]").forEach((input) => {
+      input.addEventListener("change", () => {
+        clearTimeout(checkTimer);
+        // Small delay so multi-check feels natural before reload.
+        checkTimer = setTimeout(submitCasesFilter, 250);
+      });
     });
   }
 
@@ -840,21 +869,15 @@ function initPartialNavigation() {
   if (searchEl && !searchEl.dataset.debounceBound) {
     searchEl.dataset.debounceBound = "1";
     let timer = null;
-    const submitSearch = () => {
-      const f = document.getElementById("casesFilterForm");
-      if (!f) return;
-      if (typeof f.requestSubmit === "function") f.requestSubmit();
-      else f.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
-    };
     searchEl.addEventListener("input", () => {
       clearTimeout(timer);
-      timer = setTimeout(submitSearch, 400);
+      timer = setTimeout(submitCasesFilter, 400);
     });
     searchEl.addEventListener("keydown", (evt) => {
       if (evt.key === "Enter") {
         evt.preventDefault();
         clearTimeout(timer);
-        submitSearch();
+        submitCasesFilter();
       }
     });
   }
