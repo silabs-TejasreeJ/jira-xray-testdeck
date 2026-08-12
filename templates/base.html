@@ -8,10 +8,10 @@
   <meta name="jira-base-url" content="{{ JIRA_BASE_URL }}">
   <title>{% if title %}{{ title }} · {% endif %}TestDeck</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css">
-  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260810b">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260811e">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js" defer></script>
-  <script src="{% static 'js/dashboard.js' %}?v=20260810b" defer></script>
+  <script src="{% static 'js/dashboard.js' %}?v=20260811e" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -22,10 +22,10 @@
       </div>
       <nav class="topnav">
         <a href="{% url 'home' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'overview' %}active{% endif %}">Overview</a>
-        <a href="{% url 'plan_home' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'plan' %}active{% endif %}">Plan View</a>
+        <a href="{% url 'plans' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'plans' %}active{% endif %}">Plan View</a>
+        <a href="{% url 'plan_home' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'case_grid' or page == 'plan' %}active{% endif %}">Case Grid</a>
         <a href="{% url 'results_update' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'results_update' %}active{% endif %}">Results Update</a>
         <a href="{% url 'executions' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'executions' or page == 'execution' %}active{% endif %}">Executions</a>
-        <a href="{% url 'plans' %}?technology={{ ACTIVE_TECHNOLOGY|urlencode }}&stack={{ ACTIVE_STACK_NAME|urlencode }}&release={{ ACTIVE_RELEASE_NAME|urlencode }}" class="{% if page == 'plans' %}active{% endif %}">Plans</a>
         <a href="{% url 'tests' %}" class="{% if page == 'tests' %}active{% endif %}">Repository</a>
         <a href="{% url 'coverage' %}" class="{% if page == 'coverage' %}active{% endif %}">Coverage</a>
         <a href="{% url 'defects' %}" class="{% if page == 'defects' %}active{% endif %}">Defects</a>
@@ -45,9 +45,10 @@
         {% block sidebar %}
           <h3>Navigate</h3>
           <a class="side-link {% if page == 'overview' %}active{% endif %}" href="{% url 'home' %}">Overview</a>
+          <a class="side-link {% if page == 'plans' %}active{% endif %}" href="{% url 'plans' %}">Plan View</a>
+          <a class="side-link {% if page == 'case_grid' or page == 'plan' %}active{% endif %}" href="{% url 'plan_home' %}">Case Grid</a>
           <a class="side-link {% if page == 'results_update' %}active{% endif %}" href="{% url 'results_update' %}">Results Update</a>
           <a class="side-link {% if page == 'executions' or page == 'execution' %}active{% endif %}" href="{% url 'executions' %}">Test Executions</a>
-          <a class="side-link {% if page == 'plans' %}active{% endif %}" href="{% url 'plans' %}">Test Plans</a>
           <a class="side-link {% if page == 'tests' %}active{% endif %}" href="{% url 'tests' %}">Test Repository</a>
           <a class="side-link {% if page == 'coverage' %}active{% endif %}" href="{% url 'coverage' %}">Coverage</a>
           <a class="side-link {% if page == 'defects' %}active{% endif %}" href="{% url 'defects' %}">Defects</a>

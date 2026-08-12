@@ -35,7 +35,23 @@ from .testrun_fields import (
 )
 from .xray_client import XrayClient
 
-EDITABLE_STATUSES = ["TODO", "EXECUTING", "PASS", "FAIL", "BLOCKED", "ABORTED", "NA"]
+# Match Xray Test Run statuses available on Silabs (filter + settable).
+EDITABLE_STATUSES = [
+    "PASS",
+    "TODO",
+    "EXECUTING",
+    "FAIL",
+    "ABORTED",
+    "SKIP",
+    "BROKEN",
+    "UNKNOWN",
+    "BLOCKED",
+    "RETEST",
+    "UNTRIAGED",
+    "NOT_APPLICABLE",
+    "UNTESTED",
+    "NA",
+]
 
 # Fallback Technology options (Silabs) when Jira createmeta is unavailable.
 SEED_TECHNOLOGIES = [
@@ -76,23 +92,35 @@ STATUS_ALIASES = {
     "ERROR": "FAIL",
     "EXECUTING": "EXECUTING",
     "TODO": "TODO",
-    "UNTESTED": "TODO",
+    "UNTESTED": "UNTESTED",
     "ABORTED": "ABORTED",
     "BLOCKED": "BLOCKED",
     "RETEST": "RETEST",
+    "SKIP": "SKIP",
+    "SKIPPED": "SKIP",
+    "BROKEN": "BROKEN",
+    "UNKNOWN": "UNKNOWN",
+    "UNTRIAGED": "UNTRIAGED",
     "NA": "NA",
-    "N/A": "NA",
-    "NOT APPLICABLE": "NA",
+    "N/A": "NOT_APPLICABLE",
+    "NOT APPLICABLE": "NOT_APPLICABLE",
+    "NOT_APPLICABLE": "NOT_APPLICABLE",
 }
 
 STATUS_COLORS = {
     "PASS": "#70ad47",
     "FAIL": "#c00000",
     "TODO": "#b0b0b0",
+    "UNTESTED": "#b0b0b0",
     "BLOCKED": "#595959",
     "RETEST": "#ffc000",
     "EXECUTING": "#5b9bd5",
     "ABORTED": "#833c0c",
+    "SKIP": "#7f7f7f",
+    "BROKEN": "#c00000",
+    "UNKNOWN": "#9e9e9e",
+    "UNTRIAGED": "#9e9e9e",
+    "NOT_APPLICABLE": "#7f7f7f",
     "NA": "#7f7f7f",
     "OTHER": "#9e9e9e",
 }
@@ -3256,16 +3284,21 @@ class DashboardService:
 
         execution_rows: list[dict[str, Any]] = []
         if include_execution_list:
-            exec_cache_key = f"plan_execs:{plan_key}"
+            exec_cache_key = f"plan_execs_v2:{plan_key}"
             executions = None if force_refresh else cache.get(exec_cache_key)
             if executions is None:
                 executions = self.xray.get_test_plan_executions(plan_key)
-                cache.set(exec_cache_key, executions, settings.JIRA_CACHE_SECONDS)
-                remember_key(exec_cache_key)
+                # Do not cache empty — transient Xray/JQL misses would stick.
+                if executions:
+                    cache.set(exec_cache_key, executions, settings.JIRA_CACHE_SECONDS)
+                    remember_key(exec_cache_key)
 
             execution_rows = []
             for item in executions or []:
-                if not isinstance(item, dict) or not item.get("key"):
+                if not isinstance(item, dict):
+                    continue
+                exec_key = (item.get("key") or "").strip()
+                if not exec_key:
                     continue
                 envs = item.get("testEnvironments") or []
                 if isinstance(envs, str):
@@ -3291,10 +3324,10 @@ class DashboardService:
                     env_text = str(envs)
                 execution_rows.append(
                     {
-                        "key": item.get("key"),
+                        "key": exec_key,
                         "summary": item.get("summary") or "",
                         "environments": env_text,
-                        "url": self.jira.browse_url(item["key"]),
+                        "url": self.jira.browse_url(exec_key),
                     }
                 )
 
@@ -3466,6 +3499,126 @@ class DashboardService:
             "technology": technology or "",
             "status_colors": STATUS_COLORS,
         }
+
+    def _plan_status_cache_key(self, plan_key: str) -> str:
+        return f"plan_status_v2:{plan_key}"
+
+    def _plan_status_ttl(self) -> int:
+        # Results bars are expensive; keep longer than generic Jira cache.
+        return max(int(settings.JIRA_CACHE_SECONDS or 300), 900)
+
+    def get_plan_status_summary(
+        self,
+        plan_key: str,
+        *,
+        force_refresh: bool = False,
+    ) -> dict[str, Any]:
+        """Pass / Fail / Untested rollup for a Test Plan (Plan View bars)."""
+        if not plan_key:
+            raise JiraError("plan is required")
+
+        cache_key = self._plan_status_cache_key(plan_key)
+        if not force_refresh:
+            cached = cache.get(cache_key)
+            if isinstance(cached, dict) and "total" in cached:
+                return cached
+
+        cases: list[dict[str, Any]] = []
+        try:
+            rows = self.xray.get_all_test_plan_tests(
+                plan_key, hard_limit=settings.XRAY_HARD_LIMIT
+            )
+        except JiraError:
+            rows = []
+
+        seen: set[str] = set()
+        for item in rows or []:
+            if not isinstance(item, dict):
+                continue
+            tkey = self._raven_test_key(item)
+            if not tkey or tkey in seen:
+                continue
+            seen.add(tkey)
+            cases.append({"key": tkey, "status": self._raven_test_status(item)})
+
+        summary = self._summarize_statuses(cases).to_dict()
+        payload = {
+            "plan_key": plan_key,
+            "total": summary.get("total") or 0,
+            "passed": summary.get("passed") or 0,
+            "failed": summary.get("failed") or 0,
+            "todo": summary.get("todo") or 0,
+            "pass_pct": summary.get("pass_pct") or 0,
+            "todo_pct": summary.get("todo_pct") or 0,
+            "counts": summary.get("counts") or {},
+            "chart": summary.get("chart") or [],
+        }
+        # Cache even empty — avoids re-hitting Xray for plans with no tests.
+        cache.set(cache_key, payload, self._plan_status_ttl())
+        remember_key(cache_key)
+        return payload
+
+    def get_cached_plan_status_summaries(
+        self, plan_keys: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """Return only cached plan status bars (no Xray calls)."""
+        out: dict[str, dict[str, Any]] = {}
+        keys = [k for k in dict.fromkeys(plan_keys or []) if k]
+        if not keys:
+            return out
+        cache_keys = {k: self._plan_status_cache_key(k) for k in keys}
+        try:
+            cached_map = cache.get_many(list(cache_keys.values()))
+        except Exception:
+            cached_map = {}
+        for plan_key, ck in cache_keys.items():
+            payload = cached_map.get(ck)
+            if isinstance(payload, dict) and "total" in payload:
+                out[plan_key] = payload
+        return out
+
+    def get_plan_status_summaries(
+        self,
+        plan_keys: list[str],
+        *,
+        force_refresh: bool = False,
+        max_workers: int = 8,
+    ) -> dict[str, dict[str, Any]]:
+        """Batch status bars for many plans (cache-first, then parallel fetch)."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        keys = [k for k in dict.fromkeys(plan_keys or []) if k]
+        if not keys:
+            return {}
+
+        out: dict[str, dict[str, Any]] = {}
+        missing: list[str] = []
+        if force_refresh:
+            missing = keys
+        else:
+            out = self.get_cached_plan_status_summaries(keys)
+            missing = [k for k in keys if k not in out]
+
+        if not missing:
+            return out
+
+        workers = min(max_workers, max(1, len(missing)))
+
+        def _one(plan_key: str) -> tuple[str, dict[str, Any] | None]:
+            try:
+                return plan_key, self.get_plan_status_summary(
+                    plan_key, force_refresh=force_refresh
+                )
+            except JiraError:
+                return plan_key, None
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futs = [pool.submit(_one, k) for k in missing]
+            for fut in as_completed(futs):
+                plan_key, payload = fut.result()
+                if payload is not None:
+                    out[plan_key] = payload
+        return out
 
     def get_overview(self) -> dict[str, Any]:
         executions = self.list_test_executions(limit=12)
@@ -5124,7 +5277,7 @@ class DashboardService:
             total=total,
             passed=counter.get("PASS", 0),
             failed=counter.get("FAIL", 0),
-            todo=counter.get("TODO", 0),
+            todo=counter.get("TODO", 0) + counter.get("UNTESTED", 0),
             retest=counter.get("RETEST", 0),
             blocked=counter.get("BLOCKED", 0),
         )
@@ -5137,11 +5290,27 @@ class DashboardService:
         total = sum(counter.values())
         passed = counter.get("PASS", 0)
         failed = counter.get("FAIL", 0)
-        todo = counter.get("TODO", 0)
+        # Untested bucket: classic TODO + Xray UNTESTED.
+        todo = counter.get("TODO", 0) + counter.get("UNTESTED", 0)
         pass_pct = round((passed / total) * 100, 1) if total else 0.0
         todo_pct = round((todo / total) * 100, 1) if total else 0.0
 
-        order = ["PASS", "FAIL", "BLOCKED", "RETEST", "TODO", "EXECUTING", "ABORTED", "NA"]
+        order = [
+            "PASS",
+            "FAIL",
+            "BLOCKED",
+            "RETEST",
+            "TODO",
+            "UNTESTED",
+            "EXECUTING",
+            "ABORTED",
+            "SKIP",
+            "BROKEN",
+            "UNKNOWN",
+            "UNTRIAGED",
+            "NOT_APPLICABLE",
+            "NA",
+        ]
         chart = []
         for status in order:
             if counter.get(status):
@@ -5320,6 +5489,75 @@ class DashboardService:
     def _normalize_status(value: str) -> str:
         key = (value or "TODO").strip().upper()
         return STATUS_ALIASES.get(key, key if key else "TODO")
+
+    @classmethod
+    def _raven_test_key(cls, item: dict[str, Any]) -> str:
+        if not isinstance(item, dict):
+            return ""
+        for key in ("key", "testKey", "issueKey"):
+            val = item.get(key)
+            if val:
+                return str(val).strip()
+        for nested in ("test", "issue"):
+            node = item.get(nested)
+            if isinstance(node, dict):
+                for key in ("key", "testKey", "issueKey"):
+                    val = node.get(key)
+                    if val:
+                        return str(val).strip()
+            elif isinstance(node, str) and node.strip():
+                return node.strip()
+        return ""
+
+    @classmethod
+    def _raven_test_summary(cls, item: dict[str, Any]) -> str:
+        if not isinstance(item, dict):
+            return ""
+        for key in ("summary", "testSummary", "name"):
+            val = item.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+        for nested in ("test", "issue"):
+            node = item.get(nested)
+            if isinstance(node, dict):
+                val = node.get("summary") or node.get("name")
+                if isinstance(val, str) and val.strip():
+                    return val.strip()
+        return ""
+
+    @classmethod
+    def _raven_test_status(cls, item: dict[str, Any]) -> str:
+        if not isinstance(item, dict):
+            return "TODO"
+        for key in ("latestStatus", "status", "testStatus", "statusName"):
+            val = item.get(key)
+            if isinstance(val, dict):
+                val = (
+                    val.get("name")
+                    or val.get("status")
+                    or val.get("value")
+                    or val.get("key")
+                )
+            if val is None or val == "":
+                continue
+            return cls._normalize_status(str(val))
+        return "TODO"
+
+    @classmethod
+    def _raven_test_assignee(cls, item: dict[str, Any]) -> str:
+        if not isinstance(item, dict):
+            return ""
+        for key in ("assignee", "user", "assignedTo"):
+            name = cls._user_name(item.get(key))
+            if name:
+                return name
+        for nested in ("test", "issue"):
+            node = item.get(nested)
+            if isinstance(node, dict):
+                name = cls._user_name(node.get("assignee"))
+                if name:
+                    return name
+        return ""
 
     @staticmethod
     def _clean_path(path: str) -> str:

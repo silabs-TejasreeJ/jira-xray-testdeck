@@ -15,11 +15,9 @@
 
     <select name="status" id="casesStatusFilter" class="cases-status" data-auto-submit title="Filter by status">
       <option value="">All statuses</option>
-      <option value="PASS" {% if filters.status == "PASS" %}selected{% endif %}>PASS</option>
-      <option value="FAIL" {% if filters.status == "FAIL" %}selected{% endif %}>FAIL</option>
-      <option value="TODO" {% if filters.status == "TODO" %}selected{% endif %}>TODO</option>
-      <option value="BLOCKED" {% if filters.status == "BLOCKED" %}selected{% endif %}>BLOCKED</option>
-      <option value="EXECUTING" {% if filters.status == "EXECUTING" %}selected{% endif %}>EXECUTING</option>
+      {% for st in editable_statuses %}
+        <option value="{{ st }}" {% if filters.status == st %}selected{% endif %}>{{ st }}</option>
+      {% endfor %}
     </select>
 
     <details class="cases-filter-dropdown" id="casesAssigneeDropdown">

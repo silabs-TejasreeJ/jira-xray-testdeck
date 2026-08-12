@@ -34,10 +34,42 @@ class XrayClient:
         if isinstance(data, list):
             return data
         if isinstance(data, dict):
-            for candidate in ("tests", "values", "data", "testRuns"):
+            for candidate in (
+                "tests",
+                "values",
+                "data",
+                "testRuns",
+                "testExecutions",
+                "executions",
+                "entries",
+                "results",
+                "issues",
+            ):
                 if isinstance(data.get(candidate), list):
                     return data[candidate]
         return []
+
+    @staticmethod
+    def _execution_key_from_item(item: Any) -> str:
+        """Best-effort key extraction from Xray test-plan execution payloads."""
+        if isinstance(item, str):
+            return item.strip()
+        if not isinstance(item, dict):
+            return ""
+        for key in ("key", "issueKey", "testExecutionKey", "executionKey"):
+            val = item.get(key)
+            if val:
+                return str(val).strip()
+        for nested in ("testExecution", "execution", "issue", "test"):
+            node = item.get(nested)
+            if isinstance(node, dict):
+                for key in ("key", "issueKey"):
+                    val = node.get(key)
+                    if val:
+                        return str(val).strip()
+            elif isinstance(node, str) and node.strip():
+                return node.strip()
+        return ""
 
     def get_test_execution_tests(
         self,
@@ -158,30 +190,123 @@ class XrayClient:
         self,
         test_plan_key: str,
         hard_limit: int = 5000,
+        max_workers: int = 6,
+        page_size: int | None = None,
     ) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
-        page = 1
-        while len(results) < hard_limit:
-            batch = self.get_test_plan_tests(
-                test_plan_key, limit=self.PAGE_SIZE, page=page
-            )
+        """Fetch all tests in a plan; parallelize pages after the first."""
+        size = page_size or self.PAGE_SIZE
+        first = self.get_test_plan_tests(test_plan_key, limit=size, page=1)
+        if not first:
+            return []
+
+        results = list(first)
+        if len(first) < size:
+            return results[:hard_limit]
+
+        max_pages = max(1, (hard_limit + size - 1) // size)
+        pages_to_fetch = list(range(2, min(max_pages, 80) + 1))
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(
+                    self.get_test_plan_tests, test_plan_key, size, page
+                ): page
+                for page in pages_to_fetch
+            }
+            page_map: dict[int, list[dict[str, Any]]] = {}
+            for fut in as_completed(futures):
+                page = futures[fut]
+                try:
+                    page_map[page] = fut.result() or []
+                except JiraError:
+                    page_map[page] = []
+
+        for page in sorted(page_map):
+            batch = page_map[page]
             if not batch:
                 break
             results.extend(batch)
-            if len(batch) < self.PAGE_SIZE:
+            if len(batch) < size:
                 break
-            page += 1
+            if len(results) >= hard_limit:
+                break
+
         return results[:hard_limit]
 
     def get_test_plan_executions(self, test_plan_key: str) -> list[dict[str, Any]]:
+        """Return Test Executions linked to a Test Plan (normalized key/summary rows)."""
         key = quote(test_plan_key)
-        data = self._try_paths(
-            [
-                f"/rest/raven/1.0/api/testplan/{key}/testexecution",
-                f"/rest/raven/2.0/api/testplan/{key}/testexecution",
-            ]
-        )
-        return self._normalize_list(data)
+        raw: list[dict[str, Any]] = []
+        try:
+            data = self._try_paths(
+                [
+                    f"/rest/raven/1.0/api/testplan/{key}/testexecution",
+                    f"/rest/raven/2.0/api/testplan/{key}/testexecution",
+                    f"/rest/raven/1.0/api/testplan/{key}/testexecutions",
+                    f"/rest/raven/2.0/api/testplan/{key}/testexecutions",
+                ]
+            )
+            raw = self._normalize_list(data)
+        except JiraError:
+            raw = []
+
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for item in raw:
+            exec_key = self._execution_key_from_item(item)
+            if not exec_key or exec_key in seen:
+                continue
+            seen.add(exec_key)
+            summary = ""
+            if isinstance(item, dict):
+                nested_exec = item.get("testExecution")
+                nested_issue = item.get("issue")
+                summary = (
+                    item.get("summary")
+                    or item.get("testExecutionSummary")
+                    or (
+                        nested_exec.get("summary")
+                        if isinstance(nested_exec, dict)
+                        else ""
+                    )
+                    or (
+                        nested_issue.get("summary")
+                        if isinstance(nested_issue, dict)
+                        else ""
+                    )
+                    or ""
+                )
+            rows.append({"key": exec_key, "summary": str(summary or "")})
+
+        # JQL fallback when Raven list is empty / unexpected shape.
+        if not rows:
+            for jql in (
+                f'issue in testPlanTestExecutions("{test_plan_key}") ORDER BY updated DESC',
+                f'issue in testPlanTestExecutions({test_plan_key}) ORDER BY updated DESC',
+            ):
+                try:
+                    issues = self.jira.search_all(
+                        jql=jql,
+                        fields=["summary", "updated", "status"],
+                        page_size=100,
+                        hard_limit=500,
+                    )
+                except JiraError:
+                    continue
+                for issue in issues or []:
+                    exec_key = (issue.get("key") or "").strip()
+                    if not exec_key or exec_key in seen:
+                        continue
+                    seen.add(exec_key)
+                    fields = issue.get("fields") or {}
+                    rows.append(
+                        {
+                            "key": exec_key,
+                            "summary": fields.get("summary") or "",
+                        }
+                    )
+                if rows:
+                    break
+        return rows
 
     def update_test_run_status(self, test_run_id: int | str, status: str) -> Any:
         """

@@ -16,7 +16,8 @@
         </div>
       </div>
       <div class="row">
-        <a class="btn btn-primary" href="{% url 'plan_home' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Open Plan View</a>
+        <a class="btn btn-primary" href="{% url 'plans' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Open Plan View</a>
+        <a class="btn" href="{% url 'plan_home' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Case Grid</a>
         <a class="btn" href="{% url 'executions' %}?technology={{ technology|urlencode }}">Browse Executions</a>
       </div>
     </div>

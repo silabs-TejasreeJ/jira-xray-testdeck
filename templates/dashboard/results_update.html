@@ -11,7 +11,7 @@
     {% endif %}
   </div>
   {% if plan_key and selected_execution %}
-    <a class="side-link" href="{% url 'plan_detail' plan_key %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&execution={{ selected_execution }}">Open Plan View</a>
+    <a class="side-link" href="{% url 'plan_detail' plan_key %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&execution={{ selected_execution }}">Open Case Grid</a>
     <a class="side-link" href="{% url 'execution_detail' selected_execution %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Open Execution</a>
   {% endif %}
 {% endblock %}

@@ -13,7 +13,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .credentials import set_request_credentials
 from .jira_client import JiraClient, JiraError
-from .services import get_service
+from .services import EDITABLE_STATUSES, get_service
 
 # Toggleable case-table columns (check/select column is always visible).
 PLAN_CASE_COLUMNS = [
@@ -109,27 +109,81 @@ def _plan_execution_options(
     fallback_key: str = "",
     fallback_summary: str = "",
 ) -> list[dict]:
-    """Executions for the ZIP import dropdown (current plan)."""
+    """Linked Test Executions for a plan (Plan View table + dropdowns)."""
     from django.core.cache import cache
 
     if plan_key:
-        cache_key = f"plan_exec_opts:{plan_key}"
+        cache_key = f"plan_exec_opts_v3:{plan_key}"
         cached = cache.get(cache_key)
-        if isinstance(cached, list):
+        if isinstance(cached, list) and cached:
             return cached
         try:
             runs = [
-                {"key": r["key"], "summary": r.get("summary") or ""}
+                {
+                    "key": r["key"],
+                    "summary": r.get("summary") or "",
+                    "status": "",
+                    "updated": "",
+                    "url": service.jira.browse_url(r["key"]),
+                }
                 for r in service.xray.get_test_plan_executions(plan_key)
                 if r.get("key")
             ]
+            # Enrich all rows with Jira summary/status/updated for the plan table.
+            keys = [r["key"] for r in runs if r.get("key")]
+            if keys:
+                try:
+                    by_key: dict[str, dict] = {}
+                    for i in range(0, len(keys), 100):
+                        batch = keys[i : i + 100]
+                        quoted = ", ".join(f'"{k}"' for k in batch)
+                        issues = service.jira.search_all(
+                            jql=f"key in ({quoted})",
+                            fields=["summary", "status", "updated"],
+                            page_size=100,
+                            hard_limit=len(batch) + 5,
+                        )
+                        for issue in issues or []:
+                            k = (issue.get("key") or "").strip()
+                            if not k:
+                                continue
+                            fields = issue.get("fields") or {}
+                            by_key[k] = {
+                                "summary": fields.get("summary") or "",
+                                "status": ((fields.get("status") or {}).get("name") or ""),
+                                "updated": fields.get("updated") or "",
+                            }
+                    for row in runs:
+                        info = by_key.get(row["key"] or "") or {}
+                        if info.get("summary"):
+                            row["summary"] = info["summary"]
+                        row["status"] = info.get("status") or row.get("status") or ""
+                        row["updated"] = info.get("updated") or ""
+                except JiraError:
+                    pass
+
+            def _exec_num(row: dict) -> int:
+                try:
+                    return int(str(row.get("key") or "").split("-")[-1])
+                except Exception:
+                    return 0
+
+            runs.sort(key=_exec_num, reverse=True)
             if runs:
                 cache.set(cache_key, runs, settings.JIRA_CACHE_SECONDS)
-                return runs
+            return runs
         except JiraError:
             pass
     if fallback_key:
-        return [{"key": fallback_key, "summary": fallback_summary or ""}]
+        return [
+            {
+                "key": fallback_key,
+                "summary": fallback_summary or "",
+                "status": "",
+                "updated": "",
+                "url": "",
+            }
+        ]
     return []
 
 
@@ -442,7 +496,7 @@ def execution_detail(request, key: str):
                     "showing_from": 0,
                     "showing_to": 0,
                 },
-                "editable_statuses": ["TODO", "PASS", "FAIL", "BLOCKED", "EXECUTING", "ABORTED", "NA"],
+                "editable_statuses": list(EDITABLE_STATUSES),
                 "filters": {
                     "status": case_filters["status"],
                     "search": case_filters["search"],
@@ -483,6 +537,7 @@ def execution_detail(request, key: str):
 
 @require_GET
 def plans(request):
+    """Plan View: browse all plans with pass/fail/untested results bars."""
     service = get_service()
     query = request.GET.get("q", "")
     tech = _tech(request)
@@ -490,16 +545,24 @@ def plans(request):
     release = _release(request)
     context = {
         "page": "plans",
-        "title": "Test Plans",
+        "title": "Plan View",
         "query": query,
         "technology": tech,
         "stack_name": stack,
         "release_name": release,
     }
     try:
-        context["plans"] = service.list_test_plans(
+        plan_rows = service.list_test_plans(
             query=query, limit=50, stack_name=stack, release_name=release
         )
+        # Instant bars for anything already cached; JS batches the rest.
+        cached = service.get_cached_plan_status_summaries(
+            [p.get("key") or "" for p in plan_rows]
+        )
+        for row in plan_rows:
+            key = row.get("key") or ""
+            row["results"] = cached.get(key)
+        context["plans"] = plan_rows
         context["connection"] = service.connection_status()
     except JiraError as exc:
         context.update(_error_context(exc))
@@ -511,7 +574,7 @@ def plans(request):
 @require_GET
 @ensure_csrf_cookie
 def plan_home(request):
-    """Blank Plan View: pick a plan, then a Test Execution/run."""
+    """Case Grid: pick a plan + Test Execution, then open the case table."""
     service = get_service()
     tech = _tech(request)
     stack = _stack(request)
@@ -519,7 +582,7 @@ def plan_home(request):
     plan_key = (request.GET.get("plan") or "").strip()
     execution_key = (request.GET.get("execution") or "").strip()
 
-    # Once both are chosen, open the plan dashboard for that run.
+    # Plan + specific run → case grid for that execution.
     if plan_key and execution_key:
         return _redirect_with_params(
             f"/plans/{plan_key}/",
@@ -530,8 +593,8 @@ def plan_home(request):
         )
 
     context = {
-        "page": "plan",
-        "title": "Plan View",
+        "page": "case_grid",
+        "title": "Case Grid",
         "technology": tech,
         "stack_name": stack,
         "release_name": release,
@@ -581,7 +644,7 @@ def plan_detail(request, key: str):
 
     # Do not auto-pick a run — user selects the Test Execution explicitly.
     context = {
-        "page": "plan",
+        "page": "case_grid",
         "title": key,
         "plan_key": key,
         "technology": tech,
@@ -678,7 +741,7 @@ def plan_detail(request, key: str):
                     "showing_from": 0,
                     "showing_to": 0,
                 },
-                "editable_statuses": ["TODO", "PASS", "FAIL", "BLOCKED"],
+                "editable_statuses": list(EDITABLE_STATUSES),
                 "filters": {
                     "status": case_filters["status"],
                     "search": case_filters["search"],
@@ -1002,6 +1065,38 @@ def api_plan(request, key: str):
             release_name=_release(request),
         )
         return JsonResponse(data)
+    except JiraError as exc:
+        return JsonResponse(_error_context(exc), status=exc.status_code or 502)
+
+
+@require_GET
+def api_plan_status_summary(request, key: str):
+    """Pass / Fail / Untested rollup for one plan (Plan View Results column)."""
+    service = get_service()
+    force_refresh = request.GET.get("refresh") == "1"
+    try:
+        data = service.get_plan_status_summary(key, force_refresh=force_refresh)
+        return JsonResponse({"ok": True, **data})
+    except JiraError as exc:
+        return JsonResponse(_error_context(exc), status=exc.status_code or 502)
+
+
+@require_GET
+def api_plan_status_summaries(request):
+    """Batch pass/fail/untested bars for many plans (one round-trip)."""
+    service = get_service()
+    raw = (request.GET.get("keys") or "").strip()
+    keys = [k.strip() for k in raw.replace(";", ",").split(",") if k.strip()]
+    # Cap to keep the request bounded.
+    keys = keys[:60]
+    force_refresh = request.GET.get("refresh") == "1"
+    if not keys:
+        return JsonResponse({"ok": True, "summaries": {}})
+    try:
+        summaries = service.get_plan_status_summaries(
+            keys, force_refresh=force_refresh, max_workers=8
+        )
+        return JsonResponse({"ok": True, "summaries": summaries})
     except JiraError as exc:
         return JsonResponse(_error_context(exc), status=exc.status_code or 502)
 

@@ -1,25 +1,30 @@
 {% extends "base.html" %}
 
 {% block sidebar %}
-  <h3>Plan View</h3>
+  <h3>Case Grid</h3>
   <div class="small muted" style="padding:8px 14px;">
-    Pick a Test Plan and Test Execution, then Submit.
+    Pick a Test Plan and Test Execution, then Submit to edit case status, assignee, and linked Jira.
   </div>
+  <a class="side-link" href="{% url 'plans' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Back to Plan View</a>
 {% endblock %}
 
 {% block content %}
   <div class="panel">
     <div class="panel-header">
       <div>
-        <h1>Plan View</h1>
+        <h1>Case Grid</h1>
         <div class="small muted">
-          Select a Test Plan and Test Execution, then Submit.
+          Work test cases for one Test Execution. Browse plan progress in
+          <a href="{% url 'plans' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}">Plan View</a>.
         </div>
       </div>
     </div>
     <div class="panel-body">
       {% if connection and not connection.ok %}
         <div class="alert alert-error">{{ connection.message }}</div>
+      {% endif %}
+      {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
       {% endif %}
 
       <form method="get" class="context-form compact" id="planHomeForm">
@@ -58,7 +63,7 @@
 
       {% if not plan_key %}
         <div class="alert" style="margin-top:12px;">
-          Choose a Test Plan, then Submit to load executions.
+          Choose a <strong>Test Plan</strong> and a <strong>Test Execution</strong>, then Submit.
         </div>
       {% elif not executions %}
         <div class="alert alert-error" style="margin-top:12px;">
@@ -66,8 +71,39 @@
         </div>
       {% else %}
         <div class="alert" style="margin-top:12px;">
-          Choose a <strong>Test Execution</strong>, then Submit to open the case grid.
-          For Excel export / import, use <a href="{% url 'results_update' %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&plan={{ plan_key }}">Results Update</a>.
+          <strong>{{ executions|length }}</strong> Test Execution{{ executions|length|pluralize }} linked to this plan.
+          Choose one, then Submit to open the case grid.
+        </div>
+        <div class="table-wrap" style="margin-top:12px;">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Key</th>
+                <th>Summary</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for run in executions %}
+                <tr>
+                  <td class="nowrap">
+                    <a href="{% url 'plan_detail' plan_key %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&execution={{ run.key }}">{{ run.key }}</a>
+                  </td>
+                  <td>{{ run.summary|default:"—" }}</td>
+                  <td class="nowrap">{{ run.status|default:"—" }}</td>
+                  <td class="small muted nowrap">{{ run.updated|default:"—" }}</td>
+                  <td class="nowrap">
+                    <a class="btn btn-compact btn-primary"
+                       href="{% url 'plan_detail' plan_key %}?technology={{ technology|urlencode }}&stack={{ stack_name|urlencode }}&release={{ release_name|urlencode }}&execution={{ run.key }}">
+                      Open
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
       {% endif %}
     </div>

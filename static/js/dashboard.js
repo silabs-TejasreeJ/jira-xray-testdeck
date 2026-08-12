@@ -4141,6 +4141,100 @@ function initPlanExcelExport() {
   }
 }
 
+function renderPlanResultsBar(cell, data) {
+  const bar = cell.querySelector(".plan-results-bar");
+  const meta = cell.querySelector(".plan-results-meta");
+  if (!bar || !meta) return;
+  const total = Number(data.total || 0);
+  const chart = Array.isArray(data.chart) ? data.chart : [];
+  bar.classList.remove("is-loading");
+  bar.innerHTML = "";
+  cell.removeAttribute("data-plan-status");
+  if (!total) {
+    bar.title = "No tests";
+    meta.textContent = "No tests";
+    return;
+  }
+  const titleParts = chart
+    .filter((item) => item && item.count)
+    .map((item) => `${item.status}: ${item.count}`);
+  bar.title = titleParts.join(" · ") || `${total} tests`;
+  chart.forEach((item) => {
+    if (!item || !item.count) return;
+    const span = document.createElement("span");
+    span.style.width = `${item.pct || 0}%`;
+    span.style.background = item.color || "#9e9e9e";
+    span.title = `${item.status}: ${item.count} (${item.pct}%)`;
+    bar.appendChild(span);
+  });
+  const passed = Number(data.passed || 0);
+  const failed = Number(data.failed || 0);
+  const todo = Number(data.todo || 0);
+  meta.textContent = `${data.pass_pct || 0}% pass · ${passed}P / ${failed}F / ${todo}U · ${total} total`;
+}
+
+function markPlanResultsFailed(cell, message) {
+  const bar = cell.querySelector(".plan-results-bar");
+  const meta = cell.querySelector(".plan-results-meta");
+  if (bar) bar.classList.remove("is-loading");
+  if (meta) meta.textContent = message || "Failed to load";
+  cell.removeAttribute("data-plan-status");
+}
+
+async function fetchPlanStatusBatch(keys) {
+  if (!keys.length) return {};
+  const params = new URLSearchParams();
+  params.set("keys", keys.join(","));
+  const resp = await fetch(`/api/plans/status-summaries/?${params.toString()}`, {
+    headers: { "X-CSRFToken": getCsrfToken() },
+  });
+  const data = await resp.json();
+  if (!resp.ok) {
+    throw new Error(data.error || "Unable to load plan results");
+  }
+  return data.summaries || {};
+}
+
+async function initPlansStatusBars() {
+  const cells = Array.from(document.querySelectorAll("[data-plan-status]"));
+  if (!cells.length) return;
+
+  const byKey = new Map();
+  cells.forEach((cell) => {
+    const key = (cell.getAttribute("data-plan-status") || "").trim();
+    if (!key) return;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(cell);
+  });
+
+  const keys = Array.from(byKey.keys());
+  // Batch in chunks so the first rows paint sooner while others continue.
+  const chunkSize = 10;
+  for (let i = 0; i < keys.length; i += chunkSize) {
+    const chunk = keys.slice(i, i + chunkSize);
+    try {
+      const summaries = await fetchPlanStatusBatch(chunk);
+      chunk.forEach((key) => {
+        const payload = summaries[key];
+        const targets = byKey.get(key) || [];
+        if (payload) {
+          targets.forEach((cell) => renderPlanResultsBar(cell, payload));
+        } else {
+          targets.forEach((cell) =>
+            markPlanResultsFailed(cell, "No results")
+          );
+        }
+      });
+    } catch (err) {
+      chunk.forEach((key) => {
+        (byKey.get(key) || []).forEach((cell) =>
+          markPlanResultsFailed(cell, err.message || "Failed to load")
+        );
+      });
+    }
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const el = document.getElementById("status-summary-data");
   if (el) {
@@ -4167,4 +4261,5 @@ document.addEventListener("DOMContentLoaded", () => {
   initFailureTriage();
   bindImportDoneActions();
   initPlanExcelExport();
+  initPlansStatusBars();
 });
