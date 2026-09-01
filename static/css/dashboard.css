@@ -483,6 +483,28 @@ input[type="text"], select {
   color: #b91c1c;
   background: #fee2e2;
 }
+.exec-defect-add {
+  border: 1px solid #d5dee8;
+  background: #fff;
+  color: #1f4e79;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+.exec-defect-add:hover {
+  background: #e8f1fb;
+  border-color: #9db7d4;
+}
+.exec-defect-add:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
 table.data.case-table tbody td {
   padding: 8px 10px;
   height: auto;

@@ -8,10 +8,10 @@
   <meta name="jira-base-url" content="{{ JIRA_BASE_URL }}">
   <title>{% if title %}{{ title }} · {% endif %}TestDeck</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.default.min.css">
-  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260901a">
+  <link rel="stylesheet" href="{% static 'css/dashboard.css' %}?v=20260901b">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js" defer></script>
-  <script src="{% static 'js/dashboard.js' %}?v=20260901a" defer></script>
+  <script src="{% static 'js/dashboard.js' %}?v=20260901b" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -125,6 +125,36 @@
         <button type="button" class="btn" id="failDefectCancelBtn">Cancel</button>
         <button type="button" class="btn" id="failDefectSkipBtn" hidden>Fail without defect</button>
         <button type="button" class="btn btn-primary" id="failDefectConfirmBtn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="linkDefectModal" class="modal-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="linkDefectTitle">
+      <div class="modal-header">
+        <h2 id="linkDefectTitle">Link Jira defect</h2>
+        <button type="button" class="modal-close" id="linkDefectCancelX" aria-label="Cancel">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="small muted" id="linkDefectHint">
+          Search or paste issue key(s) to link as Execution Defects. Status is not changed.
+        </p>
+        <div id="linkDefectSelected" class="defect-chip-list" hidden></div>
+        <div class="defect-picker-wrap">
+          <input
+            type="text"
+            id="linkDefectKeys"
+            class="modal-input"
+            placeholder="Search or paste key (SI91X-12345)…"
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <div id="linkDefectSuggest" class="defect-suggest" hidden></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="linkDefectCancelBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="linkDefectConfirmBtn">Link</button>
       </div>
     </div>
   </div>

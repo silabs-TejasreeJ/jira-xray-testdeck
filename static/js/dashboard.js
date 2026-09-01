@@ -393,8 +393,55 @@ function addDefectChips(keys) {
   renderDefectChips(merged);
 }
 
+function renderLinkDefectChips(keys) {
+  const list = document.getElementById("linkDefectSelected");
+  if (!list) return;
+  const uniq = [...new Set((keys || []).map((k) => String(k).toUpperCase()))];
+  if (!uniq.length) {
+    list.hidden = true;
+    list.innerHTML = "";
+    list.dataset.keys = "[]";
+    return;
+  }
+  list.hidden = false;
+  list.innerHTML = uniq
+    .map(
+      (key) =>
+        `<span class="defect-chip" data-key="${escapeHtml(key)}">${escapeHtml(
+          key
+        )} <button type="button" data-remove-key="${escapeHtml(
+          key
+        )}" aria-label="Remove">&times;</button></span>`
+    )
+    .join("");
+  list.querySelectorAll("[data-remove-key]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const drop = btn.getAttribute("data-remove-key");
+      renderLinkDefectChips(uniq.filter((k) => k !== drop));
+    });
+  });
+  list.dataset.keys = JSON.stringify(uniq);
+}
+
+function getLinkDefectChips() {
+  const list = document.getElementById("linkDefectSelected");
+  if (!list || !list.dataset.keys) return [];
+  try {
+    const parsed = JSON.parse(list.dataset.keys);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_e) {
+    return [];
+  }
+}
+
+function addLinkDefectChips(keys) {
+  renderLinkDefectChips([
+    ...new Set([...getLinkDefectChips(), ...(keys || []).map((k) => String(k).toUpperCase())]),
+  ]);
+}
+
 let _defectSearchTimer = null;
-async function searchDefectIssues(query, suggestEl) {
+async function searchDefectIssues(query, suggestEl, opts = {}) {
   const q = String(query || "").trim();
   if (!suggestEl) return;
   if (q.length < 2) {
@@ -402,6 +449,9 @@ async function searchDefectIssues(query, suggestEl) {
     suggestEl.innerHTML = "";
     return;
   }
+  const onPick = opts.onPick || ((key) => addDefectChips([key]));
+  const inputEl =
+    opts.inputEl || document.getElementById("failDefectKeys");
   try {
     const resp = await fetch(
       `/api/issues/search/?q=${encodeURIComponent(q)}&limit=20`
@@ -427,12 +477,11 @@ async function searchDefectIssues(query, suggestEl) {
       .join("");
     suggestEl.querySelectorAll("[data-key]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        addDefectChips([btn.getAttribute("data-key")]);
-        const input = document.getElementById("failDefectKeys");
-        if (input) input.value = "";
+        onPick(btn.getAttribute("data-key"));
+        if (inputEl) inputEl.value = "";
         suggestEl.hidden = true;
         suggestEl.innerHTML = "";
-        input?.focus();
+        inputEl?.focus();
       });
     });
   } catch (_err) {
@@ -643,61 +692,57 @@ function promptFailDefects(opts = {}) {
 
 function renderDefectLinksForRun(runId, keys, { merge = false, execution = "" } = {}) {
   const rid = String(runId || "").replace(/"/g, "");
-  const wrap = document.querySelector(
-    `.exec-defects[data-run-id="${rid}"] .exec-defects-links`
-  );
+  const host =
+    document.querySelector(`.exec-defects[data-run-id="${rid}"]`) || null;
+  const wrap = host
+    ? host.querySelector(".exec-defects-links")
+    : document.querySelector(
+        `.exec-defects[data-run-id="${rid}"] .exec-defects-links`
+      );
   const cell = document.querySelector(
     `tr[data-run-id="${rid}"] td[data-col="defects"]`
   );
-  const host =
-    document.querySelector(`.exec-defects[data-run-id="${rid}"]`) || null;
   const exec =
     execution ||
     (host && host.getAttribute("data-execution")) ||
-    (document.querySelector("[data-execution]") || {}).getAttribute?.(
-      "data-execution"
-    ) ||
+    currentExecutionKey() ||
     "";
   const base = getJiraBaseUrl();
   let merged = [...(keys || [])]
     .map((k) => String(k).trim().toUpperCase())
     .filter(Boolean);
   if (merge && wrap) {
-    const existing = Array.from(wrap.querySelectorAll("[data-key], a"))
-      .map((el) => {
-        const dk = el.getAttribute("data-key");
-        if (dk) return dk.trim().toUpperCase();
-        return (el.textContent || "").trim().toUpperCase();
-      })
+    const existing = Array.from(wrap.querySelectorAll("[data-key]"))
+      .map((el) => (el.getAttribute("data-key") || "").trim().toUpperCase())
       .filter(Boolean);
     merged = [...new Set([...existing, ...merged])];
   } else {
     merged = [...new Set(merged)];
   }
-  const html = merged.length
-    ? merged
-        .map((key) => {
-          const href = base ? `${base}/browse/${encodeURIComponent(key)}` : `#`;
-          return `<span class="exec-defect-chip" data-key="${escapeHtml(key)}">
+  const chipsHtml = merged
+    .map((key) => {
+      const href = base ? `${base}/browse/${encodeURIComponent(key)}` : `#`;
+      return `<span class="exec-defect-chip" data-key="${escapeHtml(key)}">
             <a href="${href}" target="_blank" rel="noopener">${escapeHtml(key)}</a>
             <button type="button" class="exec-defect-remove" data-remove-defect="${escapeHtml(
               key
             )}" title="Remove defect link" aria-label="Remove ${escapeHtml(
-            key
-          )}">&times;</button>
+        key
+      )}">&times;</button>
           </span>`;
-        })
-        .join("")
-    : "";
-  if (wrap) {
-    wrap.innerHTML = html;
-    if (host && exec) host.setAttribute("data-execution", exec);
+    })
+    .join("");
+  const addBtn = `<button type="button" class="exec-defect-add" data-add-defect title="Link Jira defect" aria-label="Link Jira defect">+</button>`;
+  if (host) {
+    if (wrap) wrap.innerHTML = chipsHtml;
+    if (exec) host.setAttribute("data-execution", exec);
+    if (!host.querySelector("[data-add-defect]")) {
+      host.insertAdjacentHTML("beforeend", addBtn);
+    }
   } else if (cell) {
-    cell.innerHTML = html
-      ? `<div class="exec-defects" data-run-id="${rid}" data-execution="${escapeHtml(
-          exec
-        )}"><div class="exec-defects-links">${html}</div></div>`
-      : "";
+    cell.innerHTML = `<div class="exec-defects" data-run-id="${rid}" data-execution="${escapeHtml(
+      exec
+    )}"><div class="exec-defects-links">${chipsHtml}</div>${addBtn}</div>`;
   }
   if (merged.length) {
     document
@@ -717,6 +762,128 @@ function renderDefectLinksForRun(runId, keys, { merge = false, execution = "" } 
 function updateRowDefectsCell(selectEl, newKeys) {
   const runId = selectEl?.dataset?.runId;
   if (runId) renderDefectLinksForRun(runId, newKeys, { merge: true });
+}
+
+async function promptLinkDefects({ title, hint } = {}) {
+  const modal = document.getElementById("linkDefectModal");
+  const input = document.getElementById("linkDefectKeys");
+  const titleEl = document.getElementById("linkDefectTitle");
+  const hintEl = document.getElementById("linkDefectHint");
+  const confirmBtn = document.getElementById("linkDefectConfirmBtn");
+  const cancelBtn = document.getElementById("linkDefectCancelBtn");
+  const cancelX = document.getElementById("linkDefectCancelX");
+  const suggestEl = document.getElementById("linkDefectSuggest");
+  if (!modal) return null;
+
+  if (titleEl) titleEl.textContent = title || "Link Jira defect";
+  if (hintEl) {
+    hintEl.textContent =
+      hint ||
+      "Search or paste issue key(s) to link as Execution Defects. Status is not changed.";
+  }
+  if (input) input.value = "";
+  renderLinkDefectChips([]);
+  if (suggestEl) {
+    suggestEl.hidden = true;
+    suggestEl.innerHTML = "";
+  }
+  modal.hidden = false;
+
+  return new Promise((resolve) => {
+    const cleanup = (result) => {
+      modal.hidden = true;
+      clearTimeout(_defectSearchTimer);
+      document.removeEventListener("keydown", onKey);
+      input?.removeEventListener("input", onInput);
+      input?.removeEventListener("keydown", onInputKey);
+      confirmBtn?.removeEventListener("click", onConfirm);
+      cancelBtn?.removeEventListener("click", onCancel);
+      cancelX?.removeEventListener("click", onCancel);
+      resolve(result);
+    };
+    const collectKeys = () => {
+      const typed = parseDefectKeysInput(input?.value || "");
+      return [...new Set([...getLinkDefectChips(), ...typed])];
+    };
+    const onConfirm = () => cleanup(collectKeys());
+    const onCancel = () => cleanup(null);
+    const onInput = () => {
+      clearTimeout(_defectSearchTimer);
+      _defectSearchTimer = setTimeout(
+        () =>
+          searchDefectIssues(input.value, suggestEl, {
+            onPick: (key) => addLinkDefectChips([key]),
+            inputEl: input,
+          }),
+        280
+      );
+    };
+    const onInputKey = (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const typed = parseDefectKeysInput(input.value);
+        if (typed.length) {
+          addLinkDefectChips(typed);
+          input.value = "";
+          if (suggestEl) {
+            suggestEl.hidden = true;
+            suggestEl.innerHTML = "";
+          }
+          return;
+        }
+        onConfirm();
+      }
+    };
+    const onKey = (ev) => {
+      if (ev.key === "Escape") onCancel();
+    };
+    input?.addEventListener("input", onInput);
+    input?.addEventListener("keydown", onInputKey);
+    confirmBtn?.addEventListener("click", onConfirm);
+    cancelBtn?.addEventListener("click", onCancel);
+    cancelX?.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey);
+    setTimeout(() => input?.focus?.(), 40);
+  });
+}
+
+async function addDefectsToRun(runId, execution = "") {
+  if (!runId) return;
+  const exec = execution || currentExecutionKey() || "";
+  const keys = await promptLinkDefects();
+  if (keys === null) return;
+  if (!keys.length) {
+    showToast("Select or paste at least one Jira key", "warn");
+    return;
+  }
+  try {
+    const resp = await fetch(
+      `/api/testruns/${encodeURIComponent(runId)}/defects/`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": getCsrfToken(),
+        },
+        body: JSON.stringify({
+          defects: keys,
+          execution: exec,
+        }),
+      }
+    );
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      throw new Error(data.error || data.message || "Unable to link defect");
+    }
+    const linked = Array.isArray(data.defects) ? data.defects : keys;
+    renderDefectLinksForRun(runId, linked, { merge: true, execution: exec });
+    showToast(
+      keys.length === 1 ? `Linked ${keys[0]}` : `Linked ${keys.length} defects`,
+      "ok"
+    );
+  } catch (err) {
+    showToast(err.message || "Unable to link defect", "error");
+  }
 }
 
 async function removeDefectFromRun(runId, defectKey, execution = "") {
@@ -773,6 +940,15 @@ function initDefectEditors(root = document) {
     if (host.dataset.removeBound) return;
     host.dataset.removeBound = "1";
     host.addEventListener("click", (evt) => {
+      const addBtn = evt.target.closest("[data-add-defect]");
+      if (addBtn && host.contains(addBtn)) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        const runId = host.getAttribute("data-run-id") || "";
+        const execution = host.getAttribute("data-execution") || "";
+        addDefectsToRun(runId, execution);
+        return;
+      }
       const btn = evt.target.closest("[data-remove-defect]");
       if (!btn || !host.contains(btn)) return;
       evt.preventDefault();
