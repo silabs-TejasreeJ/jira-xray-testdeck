@@ -60,6 +60,9 @@
             {% endif %}
           {% endfor %}
         </div>
+        {% if case.run_id %}
+          <button type="button" class="exec-defect-add" data-add-defect title="Link Jira defect" aria-label="Link Jira defect">+</button>
+        {% endif %}
       </div>
     </td>
     <td class="small section-cell col-hidden" data-col="section">{{ case.section_path }}</td>
