@@ -1080,6 +1080,27 @@ class DashboardService:
             "linked": defect_keys,
         }
 
+    def remove_case_defects(
+        self,
+        run_id: int | str,
+        defects: Any = None,
+        execution_key: str = "",
+    ) -> dict[str, Any]:
+        """Unlink Jira issue key(s) from a Test Run (Execution Defects remove)."""
+        defect_keys = self._normalize_defect_keys(defects)
+        if not defect_keys:
+            raise JiraError(
+                "Provide at least one Jira issue key/ID to remove (e.g. SI91X-12345)"
+            )
+        remaining = self.xray.remove_test_run_defects(run_id, defect_keys)
+        self._bust_execution_case_cache(execution_key)
+        return {
+            "ok": True,
+            "run_id": str(run_id),
+            "defects": remaining,
+            "removed": defect_keys,
+        }
+
     def add_case_defects_bulk(
         self,
         run_ids: list[int | str],

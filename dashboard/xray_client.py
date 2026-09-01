@@ -431,6 +431,75 @@ class XrayClient:
             f"Unable to link defect key(s) {', '.join(issue_keys)} to test run {test_run_id}"
         )
 
+    def remove_test_run_defects(
+        self, test_run_id: int | str, issue_keys: list[str]
+    ) -> list[str]:
+        """
+        Unlink Jira issue(s) from a Test Run (Xray Execution Defects remove).
+
+        Server/DC patterns:
+        - PUT /api/testrun/{id} {"defects": {"add": [], "remove": ["KEY-1"]}}
+        - DELETE /api/testrun/{id}/defect/{key}
+        """
+        keys = [
+            str(k).strip().upper()
+            for k in (issue_keys or [])
+            if k is not None and str(k).strip()
+        ]
+        keys = list(dict.fromkeys(keys))
+        if not keys:
+            return self.get_test_run_defects(test_run_id)
+
+        run_id = quote(str(test_run_id))
+        put_path = f"/rest/raven/1.0/api/testrun/{run_id}"
+        attempts: list[tuple[str, str, Any]] = [
+            ("put", put_path, {"defects": {"add": [], "remove": keys}}),
+            ("put", put_path, {"defects": {"remove": keys}}),
+        ]
+        for key in keys:
+            qkey = quote(key)
+            attempts.append(
+                ("delete", f"/rest/raven/1.0/api/testrun/{run_id}/defect/{qkey}", None)
+            )
+            attempts.append(
+                ("delete", f"/rest/raven/2.0/api/testrun/{run_id}/defect/{qkey}", None)
+            )
+
+        last_error: Exception | None = None
+        remaining = list(keys)
+        for method, path, body in attempts:
+            if not remaining:
+                break
+            try:
+                if method == "delete":
+                    self.jira.delete(path)
+                else:
+                    self.jira.put(path, json=body)
+            except JiraError as exc:
+                last_error = exc
+                if exc.status_code in {401, 403}:
+                    raise
+                continue
+            try:
+                linked_after = set(self.get_test_run_defects(test_run_id))
+            except JiraError:
+                return []
+            still = [k for k in remaining if k in linked_after]
+            if not still:
+                return sorted(linked_after)
+            remaining = still
+
+        if remaining and last_error:
+            raise last_error
+        if remaining:
+            raise JiraError(
+                f"Unable to unlink defect key(s) {', '.join(remaining)} from test run {test_run_id}"
+            )
+        try:
+            return sorted(self.get_test_run_defects(test_run_id))
+        except JiraError:
+            return []
+
     @staticmethod
     def _normalize_custom_fields(
         custom_fields: list[dict[str, Any]] | None,

@@ -451,6 +451,38 @@ input[type="text"], select {
 .exec-defects-links a {
   white-space: nowrap;
 }
+.exec-defect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 2px 1px 6px;
+  border-radius: 4px;
+  background: #eef2f7;
+  border: 1px solid #d5dee8;
+  line-height: 1.2;
+}
+.exec-defect-chip a {
+  color: #1f4e79;
+  text-decoration: none;
+  font-weight: 600;
+}
+.exec-defect-chip a:hover {
+  text-decoration: underline;
+}
+.exec-defect-remove {
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+.exec-defect-remove:hover {
+  color: #b91c1c;
+  background: #fee2e2;
+}
 table.data.case-table tbody td {
   padding: 8px 10px;
   height: auto;

@@ -1168,16 +1168,27 @@ def api_bulk_update_status(request):
 
 @require_POST
 def api_add_defects(request, run_id: str):
-    """Link Jira issue key(s) to a Test Run (Xray Execution Defects — associate by ID)."""
+    """Link or unlink Jira issue key(s) on a Test Run (Xray Execution Defects)."""
     service = get_service()
     try:
         payload = json_lib.loads(request.body.decode("utf-8") or "{}")
     except Exception:
         payload = {}
+    execution_key = payload.get("execution") or request.POST.get("execution", "")
+    remove = payload.get("remove")
+    if remove is None and (payload.get("action") or "").lower() in {"remove", "unlink"}:
+        remove = payload.get("defects") or payload.get("keys") or ""
+    if remove is not None:
+        try:
+            result = service.remove_case_defects(
+                run_id, defects=remove, execution_key=execution_key
+            )
+            return JsonResponse(result)
+        except JiraError as exc:
+            return JsonResponse(_error_context(exc), status=exc.status_code or 502)
     defects = payload.get("defects")
     if defects is None:
         defects = payload.get("keys") or request.POST.get("defects", "")
-    execution_key = payload.get("execution") or request.POST.get("execution", "")
     try:
         result = service.add_case_defects(
             run_id, defects=defects, execution_key=execution_key

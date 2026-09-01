@@ -96,6 +96,9 @@ class JiraClient:
     def post(self, path: str, **kwargs: Any) -> Any:
         return self.request("POST", path, **kwargs)
 
+    def delete(self, path: str, **kwargs: Any) -> Any:
+        return self.request("DELETE", path, **kwargs)
+
     def get_myself(self) -> dict[str, Any]:
         return self.get("/rest/api/2/myself")
 

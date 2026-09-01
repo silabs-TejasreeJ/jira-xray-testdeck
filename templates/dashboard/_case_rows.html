@@ -46,12 +46,17 @@
       {% endif %}
     </td>
     <td class="defects-cell" data-col="defects">
-      <div class="exec-defects" {% if case.run_id %}data-run-id="{{ case.run_id }}"{% endif %}>
+      <div class="exec-defects" {% if case.run_id %}data-run-id="{{ case.run_id }}"{% endif %} data-execution="{{ execution_key }}">
         <div class="exec-defects-links">
           {% for d in case.defects %}
             {% firstof d.key d.defectKey d as dkey %}
             {% if dkey %}
-              <a href="{{ JIRA_BASE_URL }}/browse/{{ dkey }}" target="_blank" rel="noopener">{{ dkey }}</a>{% if not forloop.last %} {% endif %}
+              <span class="exec-defect-chip" data-key="{{ dkey }}">
+                <a href="{{ JIRA_BASE_URL }}/browse/{{ dkey }}" target="_blank" rel="noopener">{{ dkey }}</a>
+                {% if case.run_id %}
+                  <button type="button" class="exec-defect-remove" data-remove-defect="{{ dkey }}" title="Remove defect link" aria-label="Remove {{ dkey }}">&times;</button>
+                {% endif %}
+              </span>
             {% endif %}
           {% endfor %}
         </div>
