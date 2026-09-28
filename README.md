@@ -157,11 +157,15 @@ Xray stores test **definitions** (not executions) in a **folder tree** — for e
 
 `Test Repository / 917_IoT_FreeRTOS / New_Features / IOTREQ-160331 : Expose Configurable TCP Window Size for HTTP Client`
 
+![Xray Test Repository folder tree](docs/images/xray-test-repository.png)
+
 In Jira, seeing the tests in one of those folders is tedious. You have to write (and keep rewriting) JQL such as:
 
 ```
 issue in TestRepositoryFolderTests(SW_SQA_TC,'917_IoT_FreeRTOS/New_Features/IOTREQ-160331 : Expose Configurable TCP Window Size for HTTP Client','true') AND Technology = "WLAN + BLE"
 ```
+
+![Jira JQL to list tests in one repository folder](docs/images/xray-jql-folder-tests.png)
 
 That is also how people often try to inspect the cases that belong with a **Test Plan** / feature folder. Long paths, quotes, and Technology filters are easy to get wrong.
 
@@ -170,7 +174,12 @@ That is also how people often try to inspect the cases that belong with a **Test
 1. Open **Repository**. Set the test project (default `SW_SQA_TC`) and **Technology** (e.g. `WLAN + BLE`).
 2. Use the left folder tree (**Expand all** / **Collapse all**). Parent counts include child IOTREQ folders.
 3. Click a folder — the table lists those Test issues (key, summary, labels, Open status), same slice the JQL would return.
+
+![TestDeck Repository browse for the same folder](docs/images/testdeck-repository.png)
+
 4. **Steps** opens the case in TestDeck: status, priority, assignee, folder, labels, description, and action / data / expected. **Jira** still opens the issue if you need Xray.
+
+![TestDeck test-case detail with steps](docs/images/testdeck-test-detail.png)
 
 This is browse-only. Status and defects are edited on a Test Execution in **Case Grid**.
 
