@@ -1532,20 +1532,100 @@ td.triage-selected-cell {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.repo-test-meta {
+.repo-test-page .panel-header {
+  align-items: flex-start;
+  padding: 18px 22px;
+}
+.repo-test-page .panel-body {
+  padding: 20px 22px 28px;
+}
+.repo-test-title h1 {
+  font-size: 22px;
+}
+.repo-test-summary {
+  margin: 6px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+  max-width: 72ch;
+}
+.repo-test-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.repo-test-meta-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 12px 16px;
-  margin-bottom: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 20px;
+  padding: 16px 18px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.repo-test-field {
+  min-width: 0;
+}
+.repo-test-field-wide {
+  grid-column: 1 / -1;
+}
+.repo-test-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.repo-test-folder,
+.repo-test-labels {
+  line-height: 1.45;
+  word-break: break-word;
+}
+.repo-test-section {
+  margin-top: 28px;
 }
 .repo-h2 {
-  margin: 18px 0 8px;
+  margin: 0 0 12px;
   font-size: 16px;
 }
 .repo-description {
   white-space: pre-wrap;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.55;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.repo-steps-wrap {
+  overflow: auto;
+}
+.repo-steps {
+  width: 100%;
+  table-layout: fixed;
+}
+.repo-steps-num { width: 48px; }
+.repo-steps-action { width: 38%; }
+.repo-steps-data { width: 18%; }
+.repo-steps-expected { width: 38%; }
+.repo-steps th,
+.repo-steps td {
+  vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+  padding: 12px 14px;
+}
+.repo-steps-index {
+  color: var(--muted);
+  font-weight: 650;
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .repo-test-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .status-pill.status-OPEN,
 .status-pill.status-TO-DO,

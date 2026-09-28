@@ -6,15 +6,15 @@
 {% endblock %}
 
 {% block content %}
-  <div class="panel">
+  <div class="panel repo-test-page">
     <div class="panel-header">
-      <div>
+      <div class="repo-test-title">
         <h1>{{ test.key }}</h1>
-        <div class="small muted">{{ test.summary|default:"Test case" }}</div>
+        <p class="repo-test-summary">{{ test.summary|default:"Test case" }}</p>
       </div>
-      <div>
+      <div class="repo-test-actions">
         {% if test.url %}
-          <a class="btn" href="{{ test.url }}" target="_blank" rel="noopener">Open in Jira</a>
+          <a class="btn btn-primary" href="{{ test.url }}" target="_blank" rel="noopener">Open in Jira</a>
         {% endif %}
         <a class="btn" href="{% url 'tests' %}?project={{ project_key|urlencode }}{% if test.section_path %}&folder={{ test.section_path|urlencode }}{% elif folder %}&folder={{ folder|urlencode }}{% endif %}">Back</a>
       </div>
@@ -24,56 +24,83 @@
         <div class="alert alert-error">{{ connection.message }}</div>
       {% endif %}
 
-      <div class="repo-test-meta">
-        <div><span class="small muted">Status</span><div><span class="status-pill">{{ test.status|default:"—" }}</span></div></div>
-        <div><span class="small muted">Priority</span><div>{{ test.priority|default:"—" }}</div></div>
-        <div><span class="small muted">Assignee</span><div>{{ test.assignee|default:"Unassigned" }}</div></div>
-        <div><span class="small muted">Folder</span><div class="small">{{ test.section_path|default:"—" }}</div></div>
-        {% if test.case_id or test.test_src_map_id %}
-          <div><span class="small muted">Case / map id</span><div>{{ test.case_id|default:test.test_src_map_id }}</div></div>
-        {% endif %}
-      </div>
-
-      {% if test.labels %}
-        <div style="margin:12px 0;">
-          {% for label in test.labels %}
-            <span class="repo-label">{{ label }}</span>
-          {% endfor %}
+      <section class="repo-test-meta-grid">
+        <div class="repo-test-field">
+          <div class="repo-test-label">Status</div>
+          <div><span class="status-pill">{{ test.status|default:"—" }}</span></div>
         </div>
-      {% endif %}
+        <div class="repo-test-field">
+          <div class="repo-test-label">Priority</div>
+          <div>{{ test.priority|default:"—" }}</div>
+        </div>
+        <div class="repo-test-field">
+          <div class="repo-test-label">Assignee</div>
+          <div>{{ test.assignee|default:"Unassigned" }}</div>
+        </div>
+        {% if test.case_id or test.test_src_map_id %}
+          <div class="repo-test-field">
+            <div class="repo-test-label">Case / map id</div>
+            <div>{{ test.case_id|default:test.test_src_map_id }}</div>
+          </div>
+        {% endif %}
+        <div class="repo-test-field repo-test-field-wide">
+          <div class="repo-test-label">Folder</div>
+          <div class="repo-test-folder">{{ test.section_path|default:"—" }}</div>
+        </div>
+        {% if test.labels %}
+          <div class="repo-test-field repo-test-field-wide">
+            <div class="repo-test-label">Labels</div>
+            <div class="repo-test-labels">
+              {% for label in test.labels %}
+                <span class="repo-label">{{ label }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </section>
 
       {% if test.description %}
-        <h2 class="repo-h2">Description</h2>
-        <div class="repo-description">{{ test.description|linebreaksbr }}</div>
+        <section class="repo-test-section">
+          <h2 class="repo-h2">Description</h2>
+          <div class="repo-description">{{ test.description|linebreaksbr }}</div>
+        </section>
       {% endif %}
 
-      <h2 class="repo-h2">Steps</h2>
-      {% if test.steps %}
-        <div class="table-wrap">
-          <table class="data">
-            <thead>
-              <tr>
-                <th style="width:48px;">#</th>
-                <th>Action</th>
-                <th>Data</th>
-                <th>Expected result</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for step in test.steps %}
+      <section class="repo-test-section">
+        <h2 class="repo-h2">Steps</h2>
+        {% if test.steps %}
+          <div class="table-wrap repo-steps-wrap">
+            <table class="data repo-steps">
+              <colgroup>
+                <col class="repo-steps-num">
+                <col class="repo-steps-action">
+                <col class="repo-steps-data">
+                <col class="repo-steps-expected">
+              </colgroup>
+              <thead>
                 <tr>
-                  <td>{{ step.index }}</td>
-                  <td>{{ step.action|linebreaksbr }}</td>
-                  <td>{{ step.data|linebreaksbr }}</td>
-                  <td>{{ step.expected|linebreaksbr }}</td>
+                  <th>#</th>
+                  <th>Action</th>
+                  <th>Data</th>
+                  <th>Expected result</th>
                 </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      {% else %}
-        <div class="alert">No manual steps on this test (automated or empty).</div>
-      {% endif %}
+              </thead>
+              <tbody>
+                {% for step in test.steps %}
+                  <tr>
+                    <td class="repo-steps-index">{{ step.index }}</td>
+                    <td>{{ step.action|linebreaksbr }}</td>
+                    <td>{% if step.data %}{{ step.data|linebreaksbr }}{% else %}—{% endif %}</td>
+                    <td>{% if step.expected %}{{ step.expected|linebreaksbr }}{% else %}—{% endif %}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="alert">No manual steps on this test (automated or empty).</div>
+        {% endif %}
+      </section>
     </div>
   </div>
 {% endblock %}
