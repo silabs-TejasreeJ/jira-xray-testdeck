@@ -153,13 +153,24 @@ If credentials are not in the environment, open the app and use the **Sign in** 
 
 ### Test Repository
 
-Repository is the Xray **test definition** tree (`SW_SQA_TC-…`), not a Test Execution.
+Xray stores test **definitions** (not executions) in a **folder tree** — for example:
 
-1. Open **Repository**. Set the test project (default `SW_SQA_TC`) and optional **Technology** (e.g. `WLAN + BLE`).
-2. Expand / collapse folders in the left tree (**Expand all** / **Collapse all**). Parent counts include tests in child folders (IOTREQs).
-3. Click a folder to list its tests. Listing uses Xray JQL of the form  
-   `issue in TestRepositoryFolderTests(SW_SQA_TC,'<folder path>','true') AND Technology = "WLAN + BLE"`.
-4. **Steps** opens the case in TestDeck (status, folder, labels, description, action / data / expected). **Jira** opens the issue.
+`Test Repository / 917_IoT_FreeRTOS / New_Features / IOTREQ-160331 : Expose Configurable TCP Window Size for HTTP Client`
+
+In Jira, seeing the tests in one of those folders is tedious. You have to write (and keep rewriting) JQL such as:
+
+```
+issue in TestRepositoryFolderTests(SW_SQA_TC,'917_IoT_FreeRTOS/New_Features/IOTREQ-160331 : Expose Configurable TCP Window Size for HTTP Client','true') AND Technology = "WLAN + BLE"
+```
+
+That is also how people often try to inspect the cases that belong with a **Test Plan** / feature folder. Long paths, quotes, and Technology filters are easy to get wrong.
+
+**TestDeck Repository** is that same structure, without writing JQL:
+
+1. Open **Repository**. Set the test project (default `SW_SQA_TC`) and **Technology** (e.g. `WLAN + BLE`).
+2. Use the left folder tree (**Expand all** / **Collapse all**). Parent counts include child IOTREQ folders.
+3. Click a folder — the table lists those Test issues (key, summary, labels, Open status), same slice the JQL would return.
+4. **Steps** opens the case in TestDeck: status, priority, assignee, folder, labels, description, and action / data / expected. **Jira** still opens the issue if you need Xray.
 
 This is browse-only. Status and defects are edited on a Test Execution in **Case Grid**.
 
@@ -263,7 +274,7 @@ For deep dives on past bugs and fixes, see [PROBLEMS_AND_SOLUTIONS.md](PROBLEMS_
 
 - Overview pie + filters that do not skew overall counts
 - Plan View Latest Status bars; Case Grid lists all executions for a plan
-- Test Repository folder browse, Technology filter, expand/collapse, case + steps view
+- Test Repository folder browse (avoids hand-written `TestRepositoryFolderTests` JQL), Technology filter, expand/collapse, case + steps view
 - Results Update: Export · Import HTML · Import Folder · Import ZIP · Import Excel
 - Failure triage for Xray TODOs with similar-bug picker and Excel download
 - Bulk / per-row status updates; link or unlink Execution Defects anytime from Linked Jira
