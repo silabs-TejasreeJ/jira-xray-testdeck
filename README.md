@@ -1,11 +1,12 @@
 # TestDeck
 
-TestDeck is a Django web app that gives Silicon Labs SQA a **TestRail-like** view over **Jira / Xray** — plans, executions, sections, case status, result imports, failure triage, and Excel exports.
+TestDeck is a Django web app that gives Silicon Labs SQA a **TestRail-like** view over **Jira / Xray** — plans, executions, the **Test Repository** (test cases, not runs), case status, result imports, failure triage, and Excel exports.
 
 | | |
 |---|---|
 | **Jira** | `https://jira.silabs.com` |
-| **Default project** | `SW_SQA_TE` (executions / plans) |
+| **Executions / plans** | `SW_SQA_TE` |
+| **Test cases (repository)** | `SW_SQA_TC` |
 | **Repo** | [silabs-TejasreeJ/jira-xray-testdeck](https://github.com/silabs-TejasreeJ/jira-xray-testdeck) |
 | **Author** | Teja Sree Jammulamadaka |
 
@@ -30,7 +31,7 @@ TestDeck is a Django web app that gives Silicon Labs SQA a **TestRail-like** vie
 
 - **Python 3.11+** (3.12 recommended)
 - Network access to Jira (typically **VPN** when off-site)
-- A Jira account that can read/write Xray Test Executions in `SW_SQA_TE` (or your project)
+- A Jira account that can read/write Xray Test Executions in `SW_SQA_TE` and browse Test issues in `SW_SQA_TC` (or your projects)
 - Git
 
 Optional: HTML/ZIP/Excel result files from your automation runs for import.
@@ -78,6 +79,7 @@ copy .env.example .env
 |----------|---------|
 | `JIRA_BASE_URL` | Default `https://jira.silabs.com` |
 | `JIRA_PROJECT_KEY` | Executions/plans project (`SW_SQA_TE`) |
+| `JIRA_TEST_PROJECT_KEY` | Test case / repository project (`SW_SQA_TC`) |
 | `DJANGO_SECRET_KEY` | Change from the placeholder for anything beyond local use |
 
 **Do not put your password in `.env` for day-to-day use.** Prefer `python run.py` (prompts each launch) or the browser **Sign in** page.
@@ -92,7 +94,7 @@ Leave `JIRA_USERNAME` / `JIRA_PASSWORD` blank unless you intentionally want env-
 - `XRAY_TRCF_*` — Test **Run** custom field numeric IDs (Host Platform, Interface type, etc.)
 - `JIRA_SIMILAR_BUG_*` — read-only JQL pools for “similar bug” suggestions
 
-Then initialize the local DB:
+Then initialize the local DB (required once — login fails with `no such table: django_session` if you skip this):
 
 ```bash
 python manage.py migrate
@@ -130,21 +132,36 @@ If credentials are not in the environment, open the app and use the **Sign in** 
 | Page | Path | What to do |
 |------|------|------------|
 | **Overview** | `/` | Pie chart + PASS / FAIL / TODO counts; Coex/WLAN shortcuts |
-| **Plan View** | `/plan/`, `/plans/<key>/` | Pick plan → execution; section tree + case table |
+| **Plan View** | `/plans/` | All Test Plans with Latest Status bars |
+| **Case Grid** | `/plan/`, `/plans/<key>/` | Pick a plan → see **all linked Test Executions** → open one run’s case table |
 | **Results Update** | `/results-update/` | Export / import / triage hub |
 | **Executions** | `/executions/`, `/executions/<key>/` | List runs and open a case table |
-| **Plans / Repository / Coverage / Defects** | `/plans/`, `/tests/`, `/coverage/`, `/defects/` | Supporting browse views |
+| **Repository** | `/tests/`, `/tests/<key>/` | Browse **Test issues** by Xray folder (not an execution) |
+| **Coverage / Defects** | `/coverage/`, `/defects/` | Supporting browse views |
 
-### Plan View tips
+### Plan View / Case Grid tips
 
-1. Open **Plan View** and select a **Test Plan**, then a **Test Execution**.
-2. Use **technology / stack / release** filters and the status dropdown.
-3. Click overview chips (**FAIL** / **PASS** / **TODO**) to filter the case grid.
-4. Search debounces as you type; use **Clear** when filters are active.
-5. Empty sections hide when the current filter has no matching cases.
-6. Section / filter / pagination refresh the **cases panel only** (no full page reload).
-7. Use **Continue last run** to reopen the last plan + execution.
-8. Use **Refresh** on a run when you need a fresh pull from Jira/Xray (executions are cached briefly).
+1. On **Plan View**, browse plans. On **Case Grid**, select a **Test Plan** and Submit — every linked **Test Execution** is listed.
+2. Open one run for the case grid (status, assignee, Linked Jira).
+3. Use **technology / stack / release** filters and the status dropdown.
+4. Click overview chips (**FAIL** / **PASS** / **TODO**) to filter the case grid.
+5. Search debounces as you type; use **Clear** when filters are active.
+6. Empty sections hide when the current filter has no matching cases.
+7. Section / filter / pagination refresh the **cases panel only** (no full page reload).
+8. Use **Continue last run** to reopen the last plan + execution.
+9. Use **Refresh** on a run when you need a fresh pull from Jira/Xray (executions are cached briefly).
+
+### Test Repository
+
+Repository is the Xray **test definition** tree (`SW_SQA_TC-…`), not a Test Execution.
+
+1. Open **Repository**. Set the test project (default `SW_SQA_TC`) and optional **Technology** (e.g. `WLAN + BLE`).
+2. Expand / collapse folders in the left tree (**Expand all** / **Collapse all**). Parent counts include tests in child folders (IOTREQs).
+3. Click a folder to list its tests. Listing uses Xray JQL of the form  
+   `issue in TestRepositoryFolderTests(SW_SQA_TC,'<folder path>','true') AND Technology = "WLAN + BLE"`.
+4. **Steps** opens the case in TestDeck (status, folder, labels, description, action / data / expected). **Jira** opens the issue.
+
+This is browse-only. Status and defects are edited on a Test Execution in **Case Grid**.
 
 ---
 
@@ -202,8 +219,8 @@ On Plan View / Execution case tables:
 
 - Update **status** / **assignee** per row, or select rows and use the **bulk** bar
 - Setting **PASS** or **FAIL** opens a dialog for **execution details** (Test Run custom fields: Host Platform, Interface type, etc.)
-- **Jira defects** can be linked **only on FAIL** (key or browse URL; search-as-you-type)
-- **Linked Jira** column is display-only (keys already on the run)
+- On **FAIL**, you can optionally link Jira defects in that same dialog
+- **Linked Jira** on the case row: **+** links a defect anytime (status unchanged); **×** unlinks one
 - Toasts confirm success/errors; pie/summary refresh without a full page reload
 
 ---
@@ -231,6 +248,10 @@ For deep dives on past bugs and fixes, see [PROBLEMS_AND_SOLUTIONS.md](PROBLEMS_
 | Cannot reach Jira / launcher fails | Connect VPN; confirm `JIRA_BASE_URL`; check username/password |
 | Browser Sign in loop | Clear site data for `127.0.0.1:8000`; restart with `python run.py` |
 | Empty Plan View / no executions | Confirm project key and that your user can see the Xray issues in Jira |
+| `OperationalError: no such table: django_session` | Run `python manage.py migrate` from the project root, then start the server again |
+| Repository folder tree empty | Confirm `JIRA_TEST_PROJECT_KEY` (`SW_SQA_TC`) and that Xray Test Repository is enabled for that project |
+| Repository folder lists the wrong tests | Use the exact folder path from the tree; keep Technology set if you filtered (e.g. WLAN + BLE) |
+| First load of a large execution is slow | Expected once; later visits use a short cache. Click **Refresh** only when you need a new pull |
 | Stale statuses after Jira change | Click **Refresh** on the run |
 | Triage empty after re-upload | Expected if remaining cases are Xray **PASS**; triage lists **TODO** only |
 | Import “applied” but FAIL still open | Imports write **PASS only**; set FAIL from the case table |
@@ -241,7 +262,8 @@ For deep dives on past bugs and fixes, see [PROBLEMS_AND_SOLUTIONS.md](PROBLEMS_
 ## Feature summary
 
 - Overview pie + filters that do not skew overall counts
-- Plan View section tree, case grid, Continue last run
+- Plan View Latest Status bars; Case Grid lists all executions for a plan
+- Test Repository folder browse, Technology filter, expand/collapse, case + steps view
 - Results Update: Export · Import HTML · Import Folder · Import ZIP · Import Excel
 - Failure triage for Xray TODOs with similar-bug picker and Excel download
-- Bulk / per-row status updates and FAIL defect linking
+- Bulk / per-row status updates; link or unlink Execution Defects anytime from Linked Jira
