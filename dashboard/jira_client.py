@@ -54,7 +54,8 @@ class JiraClient:
             )
 
         kwargs.setdefault("verify", self.verify_ssl)
-        kwargs.setdefault("timeout", 180)
+        # List/search calls should fail fast; writes can still pass a higher timeout.
+        kwargs.setdefault("timeout", 45 if method.upper() == "GET" else 90)
         try:
             response = self.session.request(method, self._url(path), **kwargs)
         except requests.Timeout as exc:

@@ -48,6 +48,7 @@ urlpatterns = [
     ),
     path("results-update/", views.results_update, name="results_update"),
     path("tests/", views.tests, name="tests"),
+    path("tests/<str:key>/", views.test_detail, name="test_detail"),
     path("coverage/", views.coverage, name="coverage"),
     path("defects/", views.defects, name="defects"),
     path("api/health/", views.api_health, name="api_health"),

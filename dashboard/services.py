@@ -176,13 +176,19 @@ class DashboardService:
                 "ok": False,
                 "message": "Missing JIRA_USERNAME / JIRA_PASSWORD in .env",
             }
+        cache_key = f"jira_me:{self.jira.username}"
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict) and cached.get("ok"):
+            return cached
         try:
             me = self.jira.get_myself()
-            return {
+            payload = {
                 "ok": True,
                 "message": f"Connected as {me.get('displayName') or me.get('name')}",
                 "user": me.get("displayName") or me.get("name"),
             }
+            cache.set(cache_key, payload, 180)
+            return payload
         except JiraError as exc:
             return {
                 "ok": False,
@@ -503,6 +509,10 @@ class DashboardService:
         return resolved
 
     def list_test_executions(self, query: str = "", limit: int = 40) -> list[dict[str, Any]]:
+        cache_key = f"exec_list_v1:{query}|{limit}"
+        cached = cache.get(cache_key)
+        if isinstance(cached, list):
+            return cached
         project = settings.JIRA_PROJECT_KEY
         issue_type = settings.JIRA_ISSUE_TYPE_TEST_EXECUTION
         jql = (
@@ -546,6 +556,7 @@ class DashboardService:
                     ),
                 }
             )
+        cache.set(cache_key, results, max(settings.JIRA_CACHE_SECONDS, 180))
         return results
 
     def list_test_plans(
@@ -571,6 +582,12 @@ class DashboardService:
             if release_name is not None
             else getattr(settings, "DEFAULT_RELEASE_NAME", "") or ""
         )
+        cache_key = (
+            f"plan_list_v1:{query}|{limit}|{stack_name}|{release_name}"
+        )
+        cached = cache.get(cache_key)
+        if isinstance(cached, list):
+            return cached
         field_map = self.resolve_fields()
         stack_fid = (
             field_map.get("stack_name")
@@ -660,7 +677,7 @@ class DashboardService:
                 payload=last_exc.payload,
             ) from last_exc
 
-        return [
+        rows = [
             {
                 "key": issue.get("key"),
                 "summary": (issue.get("fields") or {}).get("summary") or "",
@@ -677,6 +694,8 @@ class DashboardService:
             }
             for issue in issues
         ]
+        cache.set(cache_key, rows, max(settings.JIRA_CACHE_SECONDS, 180))
+        return rows
 
     def resolve_plan_ref(
         self,
@@ -804,24 +823,17 @@ class DashboardService:
         field_map = self.resolve_fields()
 
         def _fetch_runs() -> list[dict[str, Any]]:
-            # Prefer small detailed pages (includes assignee). Fall back if Xray 500s.
-            try:
-                rows = self.xray.get_all_test_execution_tests(
-                    execution_key,
-                    detailed=True,
-                    page_size=40,
-                    hard_limit=settings.XRAY_HARD_LIMIT,
-                )
-                if rows and any(self._run_assignee(r) for r in rows[:30]):
-                    return rows
-            except JiraError:
-                rows = []
+            # Non-detailed pages are much faster; enrich assignees only if missing.
             rows = self.xray.get_all_test_execution_tests(
                 execution_key,
                 detailed=False,
+                page_size=200,
                 hard_limit=settings.XRAY_HARD_LIMIT,
             )
-            return self._enrich_run_assignees(rows)
+            sample = rows[:20]
+            if sample and not any(self._run_assignee(r) for r in sample):
+                return self._enrich_run_assignees(rows)
+            return rows
 
         def _fetch_issues() -> list[dict[str, Any]]:
             if technology:
@@ -834,13 +846,19 @@ class DashboardService:
                 jql = f"issue in testExecutionTests({execution_key}) ORDER BY key ASC"
             fields = [
                 "summary",
-                "description",
                 "priority",
                 "assignee",
                 "labels",
                 "components",
             ]
-            for fid in field_map.values():
+            for key in (
+                "test_repo_path",
+                "test_src_map_id",
+                "case_id",
+                "technology",
+                "feature_name",
+            ):
+                fid = field_map.get(key)
                 if fid and fid not in fields:
                     fields.append(fid)
             return self.jira.search_all(
@@ -3660,41 +3678,384 @@ class DashboardService:
         search: str = "",
         limit: int = 100,
         technology: str | None = None,
+        folder_id: int | str = "",
+        project_key: str = "",
+        page: int = 1,
     ) -> dict[str, Any]:
-        project = settings.JIRA_TEST_PROJECT_KEY
+        """Browse Xray Test issues by repository folder (not an execution)."""
+        project = (project_key or settings.JIRA_TEST_PROJECT_KEY or "").strip()
         issue_type = settings.JIRA_ISSUE_TYPE_TEST
-        technology = technology if technology is not None else settings.DEFAULT_TECHNOLOGY
-        clauses = [f"project = {project}", f'issuetype = "{issue_type}"']
+        technology = (technology or "").strip()
         selected = self._clean_path(folder_hint)
-        # Paths are filtered in-memory; only use non-path hints in JQL.
-        if selected and "/" not in selected:
-            safe = selected.replace('"', '\\"')
-            clauses.append(
-                f'(labels = "{safe}" OR summary ~ "{safe}" OR description ~ "{safe}")'
-            )
-        if technology.strip():
-            safe = technology.replace('"', '\\"')
-            clauses.append(f'Technology = "{safe}"')
-        if search.strip():
-            safe = search.replace('"', '\\"')
-            clauses.append(f'(key = "{safe}" OR summary ~ "{safe}")')
-        jql = " AND ".join(clauses) + " ORDER BY updated DESC"
+        page = max(1, int(page or 1))
+        page_size = max(10, min(int(limit or 50), 200))
+        field_map = self.resolve_fields()
 
+        folders, root_count, source = self._repository_folder_tree(project)
+        selected_folder = self._find_repo_folder(folders, selected, folder_id)
+        selected_id = (
+            selected_folder.get("id")
+            if selected_folder
+            else (folder_id if str(folder_id or "").strip() else -1)
+        )
+        if selected_folder:
+            selected = selected_folder.get("path") or selected
+
+        tests: list[dict[str, Any]] = []
+        total = 0
+        jql = ""
+        # Folder browse uses Xray JQL:
+        # issue in TestRepositoryFolderTests(PROJ,'folder/path','true') AND Technology = "…"
+        if selected or search.strip():
+            tests, total, jql = self._repository_tests_from_jql(
+                project=project,
+                issue_type=issue_type,
+                selected=selected,
+                search=search,
+                technology=technology,
+                field_map=field_map,
+                page=page,
+                page_size=page_size,
+            )
+
+        pages = max(1, (int(total) + page_size - 1) // page_size) if total else 1
+        crumbs = []
+        if selected:
+            built = []
+            for part in selected.split("/"):
+                built.append(part)
+                crumbs.append({"name": part, "path": "/".join(built)})
+
+        return {
+            "tests": tests,
+            "sections": folders,
+            "count": len(tests),
+            "total": int(total or len(tests)),
+            "page": page,
+            "pages": pages,
+            "page_size": page_size,
+            "jql": jql,
+            "section_path": selected,
+            "folder_id": selected_id,
+            "project_key": project,
+            "root_count": root_count,
+            "folder_source": source,
+            "crumbs": crumbs,
+            "technology": technology,
+            "filters": {
+                "search": search,
+                "technology": technology,
+                "folder": selected,
+                "project": project,
+            },
+        }
+
+    def get_repository_test(self, test_key: str) -> dict[str, Any]:
+        """Read-only Test issue + steps (repository case, not a run)."""
+        key = (test_key or "").strip()
+        if not key:
+            raise JiraError("Test key is required")
         field_map = self.resolve_fields()
         fields = [
             "summary",
+            "description",
             "status",
             "priority",
             "assignee",
             "labels",
-            "components",
-            "updated",
         ]
-        for fid in field_map.values():
+        for key_name in ("test_repo_path", "test_src_map_id", "case_id"):
+            fid = field_map.get(key_name)
             if fid and fid not in fields:
                 fields.append(fid)
+        from concurrent.futures import ThreadPoolExecutor
 
-        issues = self.jira.search(jql=jql, fields=fields, max_results=limit).get("issues", [])
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            fut_issue = pool.submit(self.jira.get_issue, key, ",".join(fields))
+            fut_steps = pool.submit(self.xray.get_test_steps, key)
+            issue = fut_issue.result()
+            try:
+                raw_steps = fut_steps.result()
+            except JiraError:
+                raw_steps = []
+        f = issue.get("fields") or {}
+        path = self._extract_field(f, field_map.get("test_repo_path")) or self._path_from_labels(
+            f.get("labels") or []
+        )
+        steps = self._normalize_test_steps(raw_steps)
+        return {
+            "key": issue.get("key") or key,
+            "summary": f.get("summary") or "",
+            "description": self._plain_description(f.get("description")),
+            "status": ((f.get("status") or {}).get("name") or ""),
+            "priority": ((f.get("priority") or {}).get("name") or ""),
+            "assignee": self._user_name(f.get("assignee")),
+            "labels": f.get("labels") or [],
+            "components": [c.get("name") for c in (f.get("components") or [])],
+            "section_path": self._clean_path(path),
+            "feature_name": self._extract_field(f, field_map.get("feature_name")),
+            "stack_name": self._extract_field(f, field_map.get("stack_name")),
+            "test_src_map_id": self._extract_field(f, field_map.get("test_src_map_id")),
+            "case_id": self._extract_field(f, field_map.get("case_id")),
+            "technology": self._extract_field(f, field_map.get("technology")),
+            "url": self.jira.browse_url(issue.get("key") or key),
+            "steps": steps,
+        }
+
+    def _repository_folder_tree(
+        self, project_key: str
+    ) -> tuple[list[dict[str, Any]], int, str]:
+        from django.core.cache import cache
+
+        cache_key = f"repo_folders_v2:{project_key}"
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict) and cached.get("folders") is not None:
+            return cached.get("folders") or [], int(cached.get("root_count") or 0), cached.get("source") or "cache"
+        try:
+            raw = self.xray.get_test_repository_folders(project_key)
+            root = self._normalize_repo_folder_node(raw, parent_path="")
+            folders = root.get("children") or []
+            root_count = int(root.get("count") or 0)
+            payload = {"folders": folders, "root_count": root_count, "source": "xray"}
+            cache.set(cache_key, payload, max(settings.JIRA_CACHE_SECONDS, 1800))
+            return folders, root_count, "xray"
+        except JiraError:
+            return [], 0, "jql"
+
+    def _repository_tests_from_xray(
+        self,
+        *,
+        project: str,
+        selected: str,
+        selected_id: Any,
+        selected_folder: dict[str, Any] | None,
+        root_count: int,
+        field_map: dict[str, str],
+        page: int,
+        page_size: int,
+    ) -> tuple[list[dict[str, Any]], int, bool]:
+        cache_key = f"repo_tests_v1:{project}:{selected_id}:{page}:{page_size}"
+        cached = cache.get(cache_key)
+        if isinstance(cached, dict) and isinstance(cached.get("tests"), list):
+            return cached["tests"], int(cached.get("total") or 0), True
+        raw = self.xray.get_test_repository_folder_tests(
+            project,
+            selected_id if selected_id not in {None, ""} else -1,
+            limit=page_size,
+            page=page,
+            all_descendants=False,
+        )
+        total = 0
+        if len(raw) > page_size:
+            total = len(raw)
+            start = (page - 1) * page_size
+            raw = raw[start : start + page_size]
+        tests = self._normalize_repository_tests(
+            raw, field_map, selected, enrich=False
+        )
+        folder_count = selected_folder.get("count") if selected_folder else root_count
+        if tests and len(tests) >= page_size and folder_count:
+            total = int(folder_count)
+        elif tests and len(tests) < page_size:
+            total = (page - 1) * page_size + len(tests)
+        else:
+            total = int(folder_count or total or 0)
+        cache.set(
+            cache_key,
+            {"tests": tests, "total": total},
+            max(settings.JIRA_CACHE_SECONDS, 300),
+        )
+        return tests, total, True
+
+    def _normalize_repo_folder_node(
+        self, node: dict[str, Any] | None, parent_path: str = ""
+    ) -> dict[str, Any]:
+        node = node if isinstance(node, dict) else {}
+        name = (node.get("name") or node.get("folderName") or "Test Repository").strip()
+        fid = node.get("id", node.get("folderId", -1))
+        is_root = (
+            not parent_path
+            and (
+                str(fid) in {"-1", ""}
+                or name.lower() in {"test repository", "root"}
+            )
+        )
+        path = "" if is_root else self._clean_path(f"{parent_path}/{name}" if parent_path else name)
+        children = []
+        for child in node.get("folders") or node.get("children") or []:
+            if isinstance(child, dict):
+                children.append(self._normalize_repo_folder_node(child, path))
+        direct = int(node.get("testCount") or node.get("count") or 0)
+        nested = sum(int(child.get("count") or 0) for child in children)
+        return {
+            "id": fid,
+            "name": name if not is_root else "Test Repository",
+            "path": path,
+            "count": max(direct, nested),
+            "children": children,
+        }
+
+    def _find_repo_folder(
+        self,
+        nodes: list[dict[str, Any]],
+        path: str = "",
+        folder_id: int | str = "",
+    ) -> dict[str, Any] | None:
+        want_path = self._clean_path(path)
+        want_id = str(folder_id).strip() if folder_id not in {None, ""} else ""
+        if want_id in {"-1", "root"}:
+            return None
+        stack = list(nodes or [])
+        while stack:
+            node = stack.pop(0)
+            if want_id and str(node.get("id")) == want_id:
+                return node
+            if want_path and (node.get("path") or "") == want_path:
+                return node
+            stack.extend(node.get("children") or [])
+        return None
+
+    def _normalize_repository_tests(
+        self,
+        raw: list[dict[str, Any]],
+        field_map: dict[str, str],
+        selected_path: str,
+        enrich: bool = False,
+    ) -> list[dict[str, Any]]:
+        tests: list[dict[str, Any]] = []
+        missing: list[str] = []
+        for item in raw or []:
+            if isinstance(item, str):
+                key = item.strip()
+                item = {}
+            else:
+                key = (
+                    item.get("key")
+                    or item.get("testKey")
+                    or item.get("issueKey")
+                    or ((item.get("test") or {}).get("key") if isinstance(item.get("test"), dict) else "")
+                    or ""
+                )
+            key = str(key).strip()
+            if not key:
+                continue
+            status = item.get("status") or item.get("statusName") or ""
+            if isinstance(status, dict):
+                status = status.get("name") or ""
+            summary = (
+                item.get("summary")
+                or item.get("testSummary")
+                or ((item.get("test") or {}).get("summary") if isinstance(item.get("test"), dict) else "")
+                or ""
+            )
+            labels = item.get("labels") or []
+            if not isinstance(labels, list):
+                labels = []
+            row = {
+                "key": key,
+                "summary": summary,
+                "status": str(status or ""),
+                "priority": item.get("priority") or "",
+                "assignee": self._user_name(item.get("assignee") or item.get("reporter")),
+                "labels": labels,
+                "section_path": self._clean_path(
+                    item.get("testRepositoryPath")
+                    or item.get("repositoryPath")
+                    or selected_path
+                ),
+                "url": self.jira.browse_url(key),
+            }
+            if enrich and (not summary or not row["status"]):
+                missing.append(key)
+            tests.append(row)
+        if enrich and missing:
+            extra = self._bulk_fetch_tests(missing, field_map)
+            for row in tests:
+                info = extra.get(row["key"]) or {}
+                if info.get("summary"):
+                    row["summary"] = info["summary"]
+                if info.get("priority"):
+                    row["priority"] = info["priority"]
+                if info.get("assignee"):
+                    row["assignee"] = info["assignee"]
+                if info.get("labels"):
+                    row["labels"] = info["labels"]
+                if info.get("section_path"):
+                    row["section_path"] = info["section_path"]
+                if info.get("test_src_map_id"):
+                    row["test_src_map_id"] = info["test_src_map_id"]
+                if not row.get("status") and info.get("status"):
+                    row["status"] = info["status"]
+        return tests
+
+    @staticmethod
+    def _test_repository_folder_jql(
+        project: str,
+        folder_path: str,
+        *,
+        include_descendants: bool = True,
+    ) -> str:
+        """Xray Server/DC folder scope — same shape as Jira issue search."""
+        path = (folder_path or "").replace("\\", "/").strip().strip("/")
+        path_esc = path.replace("\\", "\\\\").replace("'", "\\'")
+        desc = "true" if include_descendants else "false"
+        return f"issue in TestRepositoryFolderTests({project},'{path_esc}','{desc}')"
+
+    def _repository_tests_from_jql(
+        self,
+        *,
+        project: str,
+        issue_type: str,
+        selected: str,
+        search: str,
+        technology: str,
+        field_map: dict[str, str],
+        page: int,
+        page_size: int,
+    ) -> tuple[list[dict[str, Any]], int, str]:
+        import re
+
+        clauses: list[str] = []
+        if selected:
+            clauses.append(self._test_repository_folder_jql(project, selected))
+        else:
+            clauses.append(f"project = {project}")
+            clauses.append(f'issuetype = "{issue_type}"')
+        if technology:
+            safe = technology.replace('"', '\\"')
+            clauses.append(f'Technology = "{safe}"')
+        if search.strip():
+            safe = search.replace('"', '\\"')
+            if re.match(r"^[A-Z][A-Z0-9_]+-\d+$", safe, re.I):
+                clauses.append(f'key = "{safe.upper()}"')
+            else:
+                clauses.append(f'summary ~ "{safe}"')
+        jql = " AND ".join(clauses) + " ORDER BY key ASC"
+        fields = [
+            "summary",
+            "status",
+            "labels",
+        ]
+        path_fid = field_map.get("test_repo_path")
+        if path_fid and path_fid not in fields:
+            fields.append(path_fid)
+        start_at = (page - 1) * page_size
+        try:
+            data = self.jira.search(
+                jql=jql, fields=fields, max_results=page_size, start_at=start_at
+            )
+        except JiraError:
+            alt = jql.replace(
+                "TestRepositoryFolderTests", "testRepositoryFolderTests", 1
+            )
+            if alt == jql:
+                raise
+            jql = alt
+            data = self.jira.search(
+                jql=jql, fields=fields, max_results=page_size, start_at=start_at
+            )
+        issues = data.get("issues") or []
+        total = int(data.get("total") or len(issues))
         tests = []
         for issue in issues:
             f = issue.get("fields") or {}
@@ -3706,37 +4067,65 @@ class DashboardService:
                     "priority": ((f.get("priority") or {}).get("name") or ""),
                     "assignee": self._user_name(f.get("assignee")),
                     "labels": f.get("labels") or [],
-                    "components": [c.get("name") for c in (f.get("components") or [])],
                     "section_path": self._extract_field(f, field_map.get("test_repo_path"))
                     or self._path_from_labels(f.get("labels") or []),
-                    "feature_name": self._extract_field(f, field_map.get("feature_name")),
-                    "stack_name": self._extract_field(f, field_map.get("stack_name")),
                     "test_src_map_id": self._extract_field(
                         f, field_map.get("test_src_map_id")
                     ),
-                    "technology": self._extract_field(f, field_map.get("technology")),
                     "url": self.jira.browse_url(issue["key"]),
                 }
             )
+        return tests, total, jql
 
-        sections = self._build_section_tree(tests)
-        visible = tests
-        if selected:
-            visible = [
-                t
-                for t in tests
-                if self._clean_path(t.get("section_path") or "") == selected
-                or self._clean_path(t.get("section_path") or "").startswith(selected + "/")
-            ]
-        return {
-            "tests": visible,
-            "sections": [n.to_dict() for n in sections],
-            "count": len(visible),
-            "jql": jql,
-            "section_path": selected,
-            "technology": technology,
-            "filters": {"search": search, "technology": technology},
-        }
+    @staticmethod
+    def _normalize_test_steps(raw: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+        steps: list[dict[str, Any]] = []
+        for idx, item in enumerate(raw or [], start=1):
+            if not isinstance(item, dict):
+                continue
+
+            def _text(value: Any) -> str:
+                if value is None:
+                    return ""
+                if isinstance(value, str):
+                    return value
+                if isinstance(value, dict):
+                    return (
+                        value.get("rendered")
+                        or value.get("raw")
+                        or value.get("value")
+                        or value.get("name")
+                        or ""
+                    )
+                return str(value)
+
+            fields = item.get("fields") if isinstance(item.get("fields"), dict) else {}
+            action = (
+                _text(item.get("step"))
+                or _text(item.get("action"))
+                or _text(fields.get("Action"))
+                or _text(fields.get("action"))
+            )
+            data = (
+                _text(item.get("data"))
+                or _text(fields.get("Data"))
+                or _text(fields.get("data"))
+            )
+            expected = (
+                _text(item.get("result"))
+                or _text(item.get("expectedResult"))
+                or _text(fields.get("Expected Result"))
+                or _text(fields.get("result"))
+            )
+            steps.append(
+                {
+                    "index": item.get("index") or item.get("stepIndex") or idx,
+                    "action": action,
+                    "data": data,
+                    "expected": expected,
+                }
+            )
+        return steps
 
     # --- helpers ---------------------------------------------------------
 
@@ -3843,6 +4232,7 @@ class DashboardService:
                 defects = self._defect_keys_from_links(f.get("issuelinks") or [])
                 enriched[issue["key"]] = {
                     "summary": f.get("summary") or "",
+                    "status": ((f.get("status") or {}).get("name") or ""),
                     "priority": ((f.get("priority") or {}).get("name") or ""),
                     "assignee": self._user_name(f.get("assignee")),
                     "labels": f.get("labels") or [],

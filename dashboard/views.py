@@ -853,26 +853,70 @@ def results_update(request):
 def tests(request):
     service = get_service()
     folder = request.GET.get("folder", "")
+    folder_id = request.GET.get("folder_id", "")
     search = request.GET.get("search", "")
+    project = (request.GET.get("project") or settings.JIRA_TEST_PROJECT_KEY or "").strip()
     tech = _tech(request)
+    try:
+        page = int(request.GET.get("page") or 1)
+    except (TypeError, ValueError):
+        page = 1
     context = {
         "page": "tests",
         "title": "Test Repository",
         "folder": folder,
         "search": search,
         "technology": tech,
+        "project_key": project,
     }
     try:
         data = service.get_repository_tests(
-            folder_hint=folder, search=search, technology=tech, limit=200
+            folder_hint=folder,
+            folder_id=folder_id,
+            search=search,
+            technology=tech,
+            project_key=project,
+            limit=50,
+            page=page,
         )
         context.update(data)
         context["connection"] = service.connection_status()
     except JiraError as exc:
         context.update(_error_context(exc))
-        context.update({"tests": [], "sections": [], "count": 0, "jql": ""})
+        context.update(
+            {
+                "tests": [],
+                "sections": [],
+                "count": 0,
+                "total": 0,
+                "page": 1,
+                "pages": 1,
+                "jql": "",
+                "crumbs": [],
+            }
+        )
         context["connection"] = {"ok": False, "message": str(exc)}
     return render(request, "dashboard/tests.html", context)
+
+
+@require_GET
+def test_detail(request, key: str):
+    service = get_service()
+    folder = request.GET.get("folder", "")
+    context = {
+        "page": "tests",
+        "title": key,
+        "folder": folder,
+        "project_key": (request.GET.get("project") or settings.JIRA_TEST_PROJECT_KEY or "").strip(),
+    }
+    try:
+        context["test"] = service.get_repository_test(key)
+        context["connection"] = service.connection_status()
+    except JiraError as exc:
+        context.update(_error_context(exc))
+        context["test"] = {"key": key, "summary": "", "steps": [], "labels": []}
+        context["connection"] = {"ok": False, "message": str(exc)}
+    return render(request, "dashboard/test_detail.html", context)
 
 
 @require_GET

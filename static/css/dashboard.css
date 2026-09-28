@@ -1414,6 +1414,226 @@ td.triage-selected-cell {
   opacity: 1;
 }
 
+.repo-toolbar {
+  margin: 0;
+  align-items: stretch;
+}
+.repo-toolbar input[type="text"],
+.repo-toolbar input[type="search"],
+.repo-toolbar select,
+.repo-toolbar .btn {
+  box-sizing: border-box;
+  height: 34px;
+  min-width: 0;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 32px;
+  background: #fff;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.repo-toolbar input[type="text"] { width: 140px; flex: 0 0 140px; }
+.repo-toolbar select { width: 160px; flex: 0 0 160px; }
+.repo-toolbar input[type="search"] { width: 220px; flex: 1 1 180px; }
+.repo-toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  flex: 0 0 auto;
+  text-decoration: none;
+}
+.repo-toolbar .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent-dark);
+  color: #fff;
+}
+
+.repo-crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 13px;
+}
+.repo-crumbs a {
+  color: #1f4e79;
+  text-decoration: none;
+}
+.repo-crumbs a:hover { text-decoration: underline; }
+.repo-crumb-sep { color: var(--muted); }
+.repo-label {
+  display: inline-block;
+  margin: 0 4px 4px 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eef2f7;
+  border: 1px solid #d5dee8;
+  font-size: 11px;
+}
+.repo-tree-actions {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 8px;
+}
+.repo-tree-actions .btn {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.repo-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.repo-folder-row::-webkit-details-marker { display: none; }
+.repo-folder-chevron {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  position: relative;
+}
+.repo-folder-chevron::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent #64748b;
+}
+.repo-folder[open] > .repo-folder-row .repo-folder-chevron::before {
+  top: 7px;
+  left: 4px;
+  border-width: 6px 4px 0 4px;
+  border-color: #64748b transparent transparent transparent;
+}
+.repo-folder-row:hover { background: #e3edf8; }
+.repo-folder-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px 6px;
+}
+.repo-folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-test-page .panel-header {
+  align-items: flex-start;
+  padding: 18px 22px;
+}
+.repo-test-page .panel-body {
+  padding: 20px 22px 28px;
+}
+.repo-test-title h1 {
+  font-size: 22px;
+}
+.repo-test-summary {
+  margin: 6px 0 0;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text);
+  max-width: 72ch;
+}
+.repo-test-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.repo-test-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px 20px;
+  padding: 16px 18px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.repo-test-field {
+  min-width: 0;
+}
+.repo-test-field-wide {
+  grid-column: 1 / -1;
+}
+.repo-test-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.repo-test-folder,
+.repo-test-labels {
+  line-height: 1.45;
+  word-break: break-word;
+}
+.repo-test-section {
+  margin-top: 28px;
+}
+.repo-h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.repo-description {
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.55;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.repo-steps-wrap {
+  overflow: auto;
+}
+.repo-steps {
+  width: 100%;
+  table-layout: fixed;
+}
+.repo-steps-num { width: 48px; }
+.repo-steps-action { width: 38%; }
+.repo-steps-data { width: 18%; }
+.repo-steps-expected { width: 38%; }
+.repo-steps th,
+.repo-steps td {
+  vertical-align: top;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+  padding: 12px 14px;
+}
+.repo-steps-index {
+  color: var(--muted);
+  font-weight: 650;
+  text-align: center;
+}
+@media (max-width: 900px) {
+  .repo-test-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.status-pill.status-OPEN,
+.status-pill.status-TO-DO,
+.status-pill.status-TODO {
+  background: #f0ad4e;
+  color: #1f2937;
+}
+
 @media (max-width: 640px) {
   .brand span:not(.brand-badge) { font-size: 13px; }
   .brand-badge { display: none; }
