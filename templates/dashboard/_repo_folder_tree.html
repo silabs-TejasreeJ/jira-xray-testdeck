@@ -1,0 +1,24 @@
+{% for node in nodes %}
+  {% if node.children %}
+    <details class="repo-folder" {% if section_path and node.path and node.path in section_path %}open{% endif %}>
+      <summary class="repo-folder-row">
+        <span class="repo-folder-chevron" title="Expand or collapse" aria-hidden="true"></span>
+        <a class="repo-folder-link {% if section_path == node.path %}active{% endif %}"
+           href="{% url 'tests' %}?folder={{ node.path|urlencode }}&folder_id={{ node.id }}&project={{ project_key|urlencode }}{% if technology %}&technology={{ technology|urlencode }}{% endif %}"
+           title="Open this folder">
+          <span class="repo-folder-name">{{ node.name }}</span>
+          <span class="count">{{ node.count }}</span>
+        </a>
+      </summary>
+      <div class="tree">
+        {% include "dashboard/_repo_folder_tree.html" with nodes=node.children %}
+      </div>
+    </details>
+  {% else %}
+    <a class="repo-folder-link {% if section_path == node.path %}active{% endif %}"
+       href="{% url 'tests' %}?folder={{ node.path|urlencode }}&folder_id={{ node.id }}&project={{ project_key|urlencode }}{% if technology %}&technology={{ technology|urlencode }}{% endif %}">
+      <span class="repo-folder-name">{{ node.name }}</span>
+      <span class="count">{{ node.count }}</span>
+    </a>
+  {% endif %}
+{% endfor %}

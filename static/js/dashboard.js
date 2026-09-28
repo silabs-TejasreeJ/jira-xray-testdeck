@@ -4523,4 +4523,25 @@ document.addEventListener("DOMContentLoaded", () => {
   bindImportDoneActions();
   initPlanExcelExport();
   initPlansStatusBars();
+  initRepoFolderTree();
 });
+
+function initRepoFolderTree() {
+  const tree = document.querySelector(".repo-tree");
+  if (!tree) return;
+  tree.querySelectorAll(".repo-folder-link").forEach((link) => {
+    link.addEventListener("click", (evt) => evt.stopPropagation());
+  });
+  const expandBtn = document.getElementById("repoExpandAll");
+  const collapseBtn = document.getElementById("repoCollapseAll");
+  expandBtn?.addEventListener("click", () => {
+    tree.querySelectorAll("details.repo-folder").forEach((el) => {
+      el.open = true;
+    });
+  });
+  collapseBtn?.addEventListener("click", () => {
+    tree.querySelectorAll("details.repo-folder").forEach((el) => {
+      el.open = false;
+    });
+  });
+}

@@ -99,6 +99,48 @@ class XrayClient:
                 raise
         return self._normalize_list(data)
 
+    def _fetch_remaining_pages(
+        self,
+        fetch_page,
+        first: list[dict[str, Any]],
+        *,
+        size: int,
+        hard_limit: int,
+        max_workers: int = 6,
+        wave: int = 4,
+    ) -> list[dict[str, Any]]:
+        """Fetch later pages in small parallel waves (avoids 80-at-once storms)."""
+        results = list(first)
+        if len(first) < size:
+            return results[:hard_limit]
+        page = 2
+        max_page = max(1, (hard_limit + size - 1) // size)
+        while len(results) < hard_limit and page <= max_page:
+            batch_pages = list(range(page, min(page + wave, max_page + 1)))
+            page_map: dict[int, list[dict[str, Any]]] = {}
+            with ThreadPoolExecutor(max_workers=min(max_workers, len(batch_pages))) as pool:
+                futures = {pool.submit(fetch_page, p): p for p in batch_pages}
+                for fut in as_completed(futures):
+                    p = futures[fut]
+                    try:
+                        page_map[p] = fut.result() or []
+                    except JiraError:
+                        page_map[p] = []
+            stop = False
+            for p in sorted(page_map):
+                batch = page_map[p]
+                if not batch:
+                    stop = True
+                    break
+                results.extend(batch)
+                if len(batch) < size or len(results) >= hard_limit:
+                    stop = True
+                    break
+            if stop:
+                break
+            page += wave
+        return results[:hard_limit]
+
     def get_all_test_execution_tests(
         self,
         test_exec_key: str,
@@ -118,43 +160,15 @@ class XrayClient:
         if not first:
             return []
 
-        results = list(first)
-        if len(first) < size:
-            return self._filter_keys(results, only_keys)[:hard_limit]
-
-        # Speculatively fetch more pages in parallel, then stop at short page.
-        max_pages = max(1, (hard_limit + size - 1) // size)
-        pages_to_fetch = list(range(2, min(max_pages, 80) + 1))
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {
-                pool.submit(
-                    self.get_test_execution_tests,
-                    test_exec_key,
-                    detailed,
-                    size,
-                    page,
-                ): page
-                for page in pages_to_fetch
-            }
-            page_map: dict[int, list[dict[str, Any]]] = {}
-            for fut in as_completed(futures):
-                page = futures[fut]
-                try:
-                    page_map[page] = fut.result() or []
-                except JiraError:
-                    page_map[page] = []
-
-        for page in sorted(page_map):
-            batch = page_map[page]
-            if not batch:
-                break
-            results.extend(batch)
-            if len(batch) < size:
-                # ignore higher speculative pages
-                break
-            if len(results) >= hard_limit:
-                break
-
+        results = self._fetch_remaining_pages(
+            lambda page: self.get_test_execution_tests(
+                test_exec_key, detailed=detailed, limit=size, page=page
+            ),
+            first,
+            size=size,
+            hard_limit=hard_limit,
+            max_workers=max_workers,
+        )
         return self._filter_keys(results, only_keys)[:hard_limit]
 
     @staticmethod
@@ -193,44 +207,18 @@ class XrayClient:
         max_workers: int = 6,
         page_size: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Fetch all tests in a plan; parallelize pages after the first."""
+        """Fetch all tests in a plan; parallelize later pages in small waves."""
         size = page_size or self.PAGE_SIZE
         first = self.get_test_plan_tests(test_plan_key, limit=size, page=1)
         if not first:
             return []
-
-        results = list(first)
-        if len(first) < size:
-            return results[:hard_limit]
-
-        max_pages = max(1, (hard_limit + size - 1) // size)
-        pages_to_fetch = list(range(2, min(max_pages, 80) + 1))
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = {
-                pool.submit(
-                    self.get_test_plan_tests, test_plan_key, size, page
-                ): page
-                for page in pages_to_fetch
-            }
-            page_map: dict[int, list[dict[str, Any]]] = {}
-            for fut in as_completed(futures):
-                page = futures[fut]
-                try:
-                    page_map[page] = fut.result() or []
-                except JiraError:
-                    page_map[page] = []
-
-        for page in sorted(page_map):
-            batch = page_map[page]
-            if not batch:
-                break
-            results.extend(batch)
-            if len(batch) < size:
-                break
-            if len(results) >= hard_limit:
-                break
-
-        return results[:hard_limit]
+        return self._fetch_remaining_pages(
+            lambda page: self.get_test_plan_tests(test_plan_key, limit=size, page=page),
+            first,
+            size=size,
+            hard_limit=hard_limit,
+            max_workers=max_workers,
+        )
 
     def get_test_plan_executions(self, test_plan_key: str) -> list[dict[str, Any]]:
         """Return Test Executions linked to a Test Plan (normalized key/summary rows)."""
@@ -669,6 +657,45 @@ class XrayClient:
         if last_error and getattr(last_error, "status_code", None) not in {404, 405}:
             raise last_error
         return []
+
+    def get_test_repository_folders(self, project_key: str) -> dict[str, Any]:
+        """Xray Test Repository folder tree for a project (root id is usually -1)."""
+        key = quote((project_key or "").strip())
+        if not key:
+            return {}
+        data = self._try_paths(
+            [
+                f"/rest/raven/1.0/api/testrepository/{key}/folders",
+                f"/rest/raven/2.0/api/testrepository/{key}/folders",
+            ]
+        )
+        return data if isinstance(data, dict) else {}
+
+    def get_test_repository_folder_tests(
+        self,
+        project_key: str,
+        folder_id: int | str = -1,
+        *,
+        limit: int = 100,
+        page: int = 1,
+        all_descendants: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Tests in one Test Repository folder (not an execution)."""
+        key = quote((project_key or "").strip())
+        fid = quote(str(folder_id if folder_id not in {None, ""} else -1))
+        if not key:
+            return []
+        params: dict[str, Any] = {"limit": limit, "page": page}
+        if all_descendants:
+            params["allDescendants"] = "true"
+        data = self._try_paths(
+            [
+                f"/rest/raven/1.0/api/testrepository/{key}/folders/{fid}/tests",
+                f"/rest/raven/2.0/api/testrepository/{key}/folders/{fid}/tests",
+            ],
+            params=params,
+        )
+        return self._normalize_list(data)
 
     def get_test_run_assignee(self, test_run_id: int | str) -> Any:
         """GET /rest/raven/1.0/api/testrun/{id}/assignee"""
