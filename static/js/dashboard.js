@@ -513,13 +513,20 @@ async function loadExecDetailFields(execution) {
   if (_execFieldsCache && _execFieldsCache.execution === execution) {
     return _execFieldsCache.fields || [];
   }
-  const qs = execution
-    ? `?execution=${encodeURIComponent(execution)}`
-    : "";
-  const resp = await fetch(`/api/results-update/fields/${qs}`);
-  const data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || "Unable to load execution fields");
-  const fields = data.fields || [];
+  const fetchFields = async (refresh) => {
+    const params = new URLSearchParams();
+    if (execution) params.set("execution", execution);
+    if (refresh) params.set("refresh", "1");
+    const resp = await fetch(`/api/results-update/fields/?${params.toString()}`);
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Unable to load execution fields");
+    return data.fields || [];
+  };
+  let fields = await fetchFields(false);
+  const build = fields.find((field) => field.key === "build_version");
+  if (build && (build.options || []).length <= 2) {
+    fields = await fetchFields(true);
+  }
   _execFieldsCache = { execution, fields };
   return fields;
 }
@@ -547,7 +554,9 @@ function renderModalExecDetails(fields) {
       const selected = remembered[key] || field.current || "";
       const opts = ['<option value="">None</option>']
         .concat(
-          (field.options || []).map((opt) => {
+          [...(field.options || [])]
+            .sort((a, b) => String(a).localeCompare(String(b), undefined, { sensitivity: "base" }))
+            .map((opt) => {
             const safe = escapeHtml(opt);
             const isSel = String(opt) === String(selected) ? " selected" : "";
             return `<option value="${safe}"${isSel}>${safe}</option>`;
@@ -562,6 +571,18 @@ function renderModalExecDetails(fields) {
       </label>`;
     })
     .join("");
+  if (typeof TomSelect !== "undefined") {
+    host.querySelectorAll(".status-exec-select").forEach((el) => {
+      if (el.tomselect) return;
+      if (el.options.length < 10) return;
+      new TomSelect(el, {
+        maxOptions: 2000,
+        create: false,
+        allowEmptyOption: true,
+        placeholder: "Search…",
+      });
+    });
+  }
 }
 
 /** Prompt for execution details (+ optional FAIL defects). Returns {defects, customFields} or null. */
@@ -1043,6 +1064,7 @@ async function loadCasesPartial(url, { push = true } = {}) {
     bindCaseTableHandlers(panel);
     initPartialNavigation();
     rememberPlanContext();
+    initSectionFolderTree();
   } catch (_err) {
     // Network/parse issues — fall back to a normal navigation, no error toast.
     window.location.href = url;
@@ -4524,7 +4546,31 @@ document.addEventListener("DOMContentLoaded", () => {
   initPlanExcelExport();
   initPlansStatusBars();
   initRepoFolderTree();
+  initSectionFolderTree();
 });
+
+function initSectionFolderTree() {
+  const panel = document.getElementById("sectionTreePanel");
+  if (!panel) return;
+  panel.querySelectorAll("[data-section-tree-expand]").forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => {
+      panel.querySelectorAll("details.section-folder").forEach((el) => {
+        el.open = true;
+      });
+    });
+  });
+  panel.querySelectorAll("[data-section-tree-collapse]").forEach((btn) => {
+    if (btn.dataset.bound) return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => {
+      panel.querySelectorAll("details.section-folder").forEach((el) => {
+        el.open = false;
+      });
+    });
+  });
+}
 
 function initRepoFolderTree() {
   const tree = document.querySelector(".repo-tree");

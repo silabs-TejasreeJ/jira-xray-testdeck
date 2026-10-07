@@ -213,6 +213,43 @@ a:hover { text-decoration: underline; }
   font-size: 13px;
 }
 .tree summary::-webkit-details-marker { display: none; }
+.section-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  list-style: none;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.section-folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.section-folder-chevron {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  position: relative;
+}
+.section-folder-chevron::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  border-style: solid;
+  border-width: 4px 0 4px 6px;
+  border-color: transparent transparent transparent #64748b;
+}
+.section-folder[open] > .section-folder-row .section-folder-chevron::before {
+  top: 7px;
+  left: 4px;
+  border-width: 6px 4px 0 4px;
+  border-color: #64748b transparent transparent transparent;
+}
 .tree summary:hover, .tree a:hover { background: #e3edf8; }
 .tree a {
   display: flex;

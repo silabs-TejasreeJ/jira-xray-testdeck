@@ -136,11 +136,19 @@ JIRA_BUG_ISSUE_TYPES = os.getenv("JIRA_BUG_ISSUE_TYPES", "Bug,Defect")
 # Jira *Test issue* fields from SWSQAT: Xray View Test Screen (not Test Run TRCFs).
 XRAY_FIELD_MAP = {
     "test_repo_path": os.getenv("XRAY_TEST_REPO_PATH_FIELD", "customfield_30962"),
-    "test_environments": os.getenv("XRAY_TEST_ENVIRONMENTS_FIELD", ""),
-    "test_plan": os.getenv("XRAY_TEST_PLAN_FIELD", ""),
+    "test_environments": os.getenv("XRAY_TEST_ENVIRONMENTS_FIELD", "customfield_30976"),
+    "test_plan": os.getenv("XRAY_TEST_PLAN_FIELD", "customfield_30978"),
     "stack_name": os.getenv("XRAY_STACK_NAME_FIELD", "customfield_32353"),
-    # Auto-detected by name if blank; set once known (plan Details: release_name).
-    "release_name": os.getenv("XRAY_RELEASE_NAME_FIELD", ""),
+    # SWSQATE: Xray View Test Execution Screen
+    "release_name": os.getenv("XRAY_RELEASE_NAME_FIELD", "customfield_33447"),
+    "sdk_build_num": os.getenv("XRAY_SDK_BUILD_NUM_FIELD", "customfield_32441"),
+    "jenkins_url": os.getenv("XRAY_JENKINS_URL_FIELD", "customfield_32755"),
+    "release_milestone": os.getenv("XRAY_RELEASE_MILESTONE_FIELD", "customfield_33448"),
+    "package_version": os.getenv("XRAY_PACKAGE_VERSION_FIELD", "customfield_33452"),
+    "job_type": os.getenv("XRAY_JOB_TYPE_FIELD", "customfield_33449"),
+    "branch_name": os.getenv("XRAY_BRANCH_NAME_FIELD", "customfield_33450"),
+    "testbed_name": os.getenv("XRAY_TESTBED_NAME_FIELD", "customfield_33451"),
+    "utf_exec_map_id": os.getenv("XRAY_UTF_EXEC_MAP_ID_FIELD", "customfield_32351"),
     "feature_name": os.getenv("XRAY_FEATURE_NAME_FIELD", "customfield_32357"),
     "sub_feature_name": os.getenv("XRAY_SUB_FEATURE_NAME_FIELD", "customfield_32346"),
     "tech_area": os.getenv("XRAY_TECH_AREA_FIELD", "customfield_33453"),

@@ -1,8 +1,12 @@
 {% firstof filters.base_qs filters.qs "" as base_qs %}
 {% for node in nodes %}
   {% if node.children %}
-    <details open>
-      <summary>{{ node.name }} <span class="count">{{ node.count }}</span></summary>
+    <details class="section-folder" {% if not section_path or node.path and node.path in section_path %}open{% endif %}>
+      <summary class="section-folder-row">
+        <span class="section-folder-chevron" title="Expand or collapse" aria-hidden="true"></span>
+        <span class="section-folder-name">{{ node.name }}</span>
+        <span class="count">{{ node.count }}</span>
+      </summary>
       <div class="tree">
         <a href="?section={{ node.path|urlencode }}{% if base_qs %}&{{ base_qs }}{% else %}{% if technology %}&technology={{ technology|urlencode }}{% endif %}{% if selected_execution %}&execution={{ selected_execution }}{% endif %}{% endif %}"
            class="{% if section_path == node.path %}active{% endif %}">

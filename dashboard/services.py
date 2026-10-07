@@ -31,6 +31,7 @@ from .testrun_fields import (
     extract_named_ids,
     is_valid_trcf_id,
     match_field_key,
+    normalize_field_label,
     normalize_trcf_value,
 )
 from .xray_client import XrayClient
@@ -402,6 +403,60 @@ class DashboardService:
         remember_key(cache_key)
         return options
 
+    def list_sdk_build_num_options(
+        self, execution_key: str = "", force_refresh: bool = False
+    ) -> tuple[list[str], str]:
+        """Distinct sdk_build_num values from Test Executions (text field, not a select)."""
+        field_id = (
+            settings.XRAY_FIELD_MAP.get("sdk_build_num") or "customfield_32441"
+        ).strip()
+        cache_key = "sdk_build_num_options_v1"
+        options: list[str] = []
+        if not force_refresh:
+            cached = cache.get(cache_key)
+            if isinstance(cached, list):
+                options = list(cached)
+
+        current = ""
+        if execution_key and field_id:
+            try:
+                issue = self.jira.get_issue(execution_key, fields=field_id)
+                current = self._extract_field(issue.get("fields") or {}, field_id)
+            except JiraError:
+                current = ""
+
+        if not options:
+            project = settings.JIRA_PROJECT_KEY
+            issue_type = getattr(settings, "JIRA_ISSUE_TYPE_TEST_EXECUTION", "")
+            cf_num = field_id.replace("customfield_", "") if field_id.startswith("customfield_") else ""
+            jql = f'project = "{project}" AND issuetype = "{issue_type}"'
+            if cf_num:
+                jql += f" AND cf[{cf_num}] is not EMPTY"
+            jql += " ORDER BY updated DESC"
+            try:
+                issues = self.jira.search(
+                    jql=jql,
+                    fields=[field_id],
+                    max_results=200,
+                ).get("issues", [])
+                seen: set[str] = set()
+                for issue in issues:
+                    text = self._extract_field(issue.get("fields") or {}, field_id)
+                    if text and text not in seen:
+                        seen.add(text)
+                        options.append(text)
+            except JiraError:
+                pass
+            if options:
+                cache.set(cache_key, options, max(settings.JIRA_CACHE_SECONDS, 600))
+                remember_key(cache_key)
+
+        if current and current not in options:
+            options = [current] + options
+        elif current and current in options:
+            options = [current] + [o for o in options if o != current]
+        return options, current
+
     @staticmethod
     def _jql_custom_equals(field_name: str, field_id: str | None, value: str) -> str:
         """Build a JQL equality clause for a custom field.
@@ -465,6 +520,8 @@ class DashboardService:
             "test_plan": ["test plan", "testplan"],
             "stack_name": ["stack_name", "stack name"],
             "release_name": ["release_name", "release name"],
+            "sdk_build_num": ["sdk_build_num", "sdk build num", "sdk build"],
+            "jenkins_url": ["jenkins_url", "jenkins url"],
             "feature_name": ["feature_name", "feature name"],
             "tech_area": ["tech_area", "tech area"],
             "testrail_section": [
@@ -814,7 +871,7 @@ class DashboardService:
         """
         technology = technology if technology is not None else settings.DEFAULT_TECHNOLOGY
         tech_key = (technology or "ALL").replace(" ", "_").replace("+", "plus")
-        cache_key = f"exec_cases_v7:{execution_key}:{tech_key}"
+        cache_key = f"exec_cases_v8:{execution_key}:{tech_key}"
         if not force_refresh:
             cached = cache.get(cache_key)
             if cached is not None:
@@ -823,15 +880,15 @@ class DashboardService:
         field_map = self.resolve_fields()
 
         def _fetch_runs() -> list[dict[str, Any]]:
-            # Non-detailed pages are much faster; enrich assignees only if missing.
+            # Prefer detailed pages so Test Run assignee is in the row (Xray column).
+            # Large pages often 500 with detailed=true; the client then falls back.
             rows = self.xray.get_all_test_execution_tests(
                 execution_key,
-                detailed=False,
-                page_size=200,
+                detailed=True,
+                page_size=50,
                 hard_limit=settings.XRAY_HARD_LIMIT,
             )
-            sample = rows[:20]
-            if sample and not any(self._run_assignee(r) for r in sample):
+            if any(not self._run_assignee(r) for r in rows if isinstance(r, dict)):
                 return self._enrich_run_assignees(rows)
             return rows
 
@@ -982,6 +1039,7 @@ class DashboardService:
             "exec_cases_v5:",
             "exec_cases_v6:",
             "exec_cases_v7:",
+            "exec_cases_v8:",
         ):
             bust_prefix(f"{prefix}{execution_key}:")
         # Also clear common tech-key variants if they were never registered.
@@ -995,6 +1053,7 @@ class DashboardService:
                 "exec_cases_v5:",
                 "exec_cases_v6:",
                 "exec_cases_v7:",
+                "exec_cases_v8:",
             ):
                 cache.delete(f"{prefix}{execution_key}:{tech_key}")
 
@@ -2732,6 +2791,175 @@ class DashboardService:
             **triage,
         }
 
+    def _jira_select_options_by_names(
+        self,
+        names: list[str],
+        *,
+        project: str,
+        issue_types: list[str],
+    ) -> list[str]:
+        """allowedValues from Jira createmeta for fields matching these names."""
+        wanted = {normalize_field_label(n) for n in names if n}
+        compact = {n.replace(" ", "") for n in wanted}
+        field_ids: list[str] = []
+        try:
+            for item in self.jira.get_fields() or []:
+                if not isinstance(item, dict):
+                    continue
+                name = normalize_field_label(item.get("name") or "")
+                field_id = str(item.get("id") or "").strip()
+                if not name or not field_id:
+                    continue
+                if name in wanted or name.replace(" ", "") in compact:
+                    field_ids.append(field_id)
+        except JiraError:
+            return []
+        if not field_ids:
+            return []
+
+        options: list[str] = []
+        seen: set[str] = set()
+
+        def _add(value: Any) -> None:
+            text = normalize_trcf_value(value)
+            if not text or text in seen:
+                return
+            seen.add(text)
+            options.append(text)
+
+        for issue_type in issue_types:
+            if not issue_type:
+                continue
+            try:
+                meta = self.jira.get(
+                    "/rest/api/2/issue/createmeta",
+                    params={
+                        "projectKeys": project,
+                        "issuetypeNames": issue_type,
+                        "expand": "projects.issuetypes.fields",
+                    },
+                )
+            except JiraError:
+                continue
+            for proj in (meta.get("projects") if isinstance(meta, dict) else None) or []:
+                for itype in proj.get("issuetypes") or []:
+                    fields = itype.get("fields") or {}
+                    for field_id in field_ids:
+                        field = fields.get(field_id) or {}
+                        for allowed in field.get("allowedValues") or []:
+                            if isinstance(allowed, dict):
+                                _add(allowed.get("value") or allowed.get("name") or allowed.get("label"))
+                            else:
+                                _add(allowed)
+        return options
+
+    def _hydrate_trcf_select_options(
+        self, catalog: dict[str, dict[str, Any]], execution_key: str
+    ) -> None:
+        """Fill select-list options from Xray field definitions and Jira lists."""
+        # Options already on a detailed Test Run (COMBO values[]).
+        if execution_key:
+            try:
+                samples = self.xray.get_test_execution_tests(
+                    execution_key, detailed=False, limit=10, page=1
+                )
+            except JiraError:
+                samples = []
+            for sample in samples:
+                if not isinstance(sample, dict):
+                    continue
+                run_id = sample.get("id") or sample.get("testRunId")
+                if not run_id:
+                    continue
+                try:
+                    run = self.xray.get_test_run(run_id)
+                except JiraError:
+                    continue
+                blobs = [run]
+                for key_name in ("customFields", "customfields", "fields"):
+                    node = run.get(key_name) if isinstance(run, dict) else None
+                    if node:
+                        blobs.append(node)
+                found_options = False
+                for blob in blobs:
+                    for raw in extract_named_ids(blob):
+                        self._apply_trcf_entry(catalog, raw)
+                    if isinstance(blob, list):
+                        for raw in blob:
+                            if isinstance(raw, dict):
+                                self._apply_trcf_entry(catalog, raw)
+                                if raw.get("values") or raw.get("options") or raw.get("allowedValues"):
+                                    found_options = True
+                    elif isinstance(blob, dict) and (
+                        blob.get("values") or blob.get("options")
+                    ):
+                        found_options = True
+                if found_options or any(
+                    len(item.get("options") or []) > 2 for item in catalog.values()
+                ):
+                    break
+
+        # Execution-level sdk_build_num is a text field — options = values already used.
+        build = catalog.get("build_version") or {}
+        builds, current = self.list_sdk_build_num_options(execution_key)
+        for text in builds:
+            if text not in build["options"]:
+                build["options"].append(text)
+        if current and not build.get("current"):
+            build["current"] = current
+
+    def _harvest_trcf_options_from_execution(
+        self, execution_key: str, *, sample_size: int = 25
+    ) -> list[dict[str, Any]]:
+        """Collect Test Run custom field values already used on this execution."""
+        try:
+            tests = self.xray.get_test_execution_tests(
+                execution_key, detailed=False, limit=200, page=1
+            )
+        except JiraError:
+            return []
+        if not tests:
+            return []
+
+        def _status(item: dict[str, Any]) -> str:
+            raw = item.get("status")
+            if isinstance(raw, dict):
+                raw = raw.get("name") or raw.get("value")
+            return str(raw or "").strip().upper()
+
+        ranked = sorted(
+            [t for t in tests if isinstance(t, dict)],
+            key=lambda t: 0 if _status(t) in {"PASS", "PASSED"} else 1,
+        )
+        run_ids: list[Any] = []
+        seen: set[str] = set()
+        for item in ranked:
+            run_id = item.get("id") or item.get("testRunId")
+            if not run_id:
+                continue
+            key = str(run_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            run_ids.append(run_id)
+            if len(run_ids) >= sample_size:
+                break
+
+        harvested: list[dict[str, Any]] = []
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _one(run_id: Any) -> list[dict[str, Any]]:
+            try:
+                return self.xray.get_test_run_custom_field_values(run_id) or []
+            except JiraError:
+                return []
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            futures = [pool.submit(_one, run_id) for run_id in run_ids]
+            for fut in as_completed(futures):
+                harvested.extend(fut.result())
+        return harvested
+
     def _apply_trcf_entry(self, catalog: dict[str, dict[str, Any]], raw: dict[str, Any]) -> str:
         """Merge a discovered TRCF onto the known Test Details catalog only."""
         name = str(
@@ -2742,6 +2970,12 @@ class DashboardService:
             return ""
         # Only keep fields we intentionally show (ignore sdk_build_num, job_type, …).
         key = match_field_key(name) if name else ""
+        if not key and is_valid_trcf_id(field_id):
+            want = int(field_id)
+            for item_key, item in catalog.items():
+                if is_valid_trcf_id(item.get("id")) and int(item["id"]) == want:
+                    key = item_key
+                    break
         if not key or key not in catalog:
             return ""
         if is_valid_trcf_id(field_id):
@@ -2785,7 +3019,7 @@ class DashboardService:
             ]
         )
 
-        cache_key = f"trcf_catalog_v5:{(execution_key or 'none')}:{','.join(project_keys)}"
+        cache_key = f"trcf_catalog_v8:{(execution_key or 'none')}:{','.join(project_keys)}"
         if not force_refresh:
             cached = cache.get(cache_key)
             if isinstance(cached, dict):
@@ -2868,38 +3102,53 @@ class DashboardService:
                 if sum(1 for item in catalog.values() if item.get("id") is not None) >= 8:
                     break
 
-        # 2) Project settings (admin endpoints; often 404 for normal users).
-        mapped_so_far = sum(1 for item in catalog.values() if item.get("id") is not None)
-        if mapped_so_far < 3:
-            try:
-                settings_fields, settings_probe = self.xray.list_test_run_custom_field_settings(
-                    project_keys
-                )
-                probe_log.extend(settings_probe or [])
-            except JiraError:
-                settings_fields = []
-            if settings_fields:
-                discovered_from.append("settings")
-                for raw in settings_fields:
-                    if not isinstance(raw, dict):
-                        continue
-                    name = raw.get("name") or raw.get("label") or ""
-                    if name:
-                        remote_names.append(str(name))
-                    self._apply_trcf_entry(catalog, raw)
-                for raw in extract_named_ids(settings_fields):
-                    if raw.get("name"):
-                        remote_names.append(str(raw["name"]))
+        # 2) Project settings — source of the real Select-list options (not seeds).
+        settings_fields = []
+        try:
+            settings_fields, settings_probe = self.xray.list_test_run_custom_field_settings(
+                project_keys
+            )
+            probe_log.extend(settings_probe or [])
+        except JiraError:
+            settings_fields = []
+        if settings_fields:
+            discovered_from.append("settings")
+            for raw in settings_fields:
+                if not isinstance(raw, dict):
+                    continue
+                name = raw.get("name") or raw.get("label") or ""
+                if name:
+                    remote_names.append(str(name))
+                self._apply_trcf_entry(catalog, raw)
+            for raw in extract_named_ids(settings_fields):
+                if raw.get("name"):
+                    remote_names.append(str(raw["name"]))
+                self._apply_trcf_entry(catalog, raw)
+
+        # 3) Values already present on this execution (PASS runs first).
+        if execution_key:
+            harvested = self._harvest_trcf_options_from_execution(execution_key)
+            if harvested:
+                discovered_from.append("execution_values")
+                for raw in harvested:
                     self._apply_trcf_entry(catalog, raw)
 
-        # Keep seed options first, then discovered uniqueness (skip junk values).
+        self._hydrate_trcf_select_options(catalog, execution_key)
+
+        # Never keep the two-item hardcoded wifi_sdk seeds for build fields.
+        # Other fields may still use seeds only when Xray returned nothing.
+        no_seed_keys = {"build_version", "evk_version"}
         for key, item in catalog.items():
-            seeds = SEED_OPTIONS.get(key) or []
             merged: list[str] = []
-            for value in seeds + item["options"]:
+            for value in item.get("options") or []:
                 text = normalize_trcf_value(value)
                 if text and text not in merged:
                     merged.append(text)
+            if not merged and key not in no_seed_keys:
+                for value in SEED_OPTIONS.get(key) or []:
+                    text = normalize_trcf_value(value)
+                    if text and text not in merged:
+                        merged.append(text)
             item["options"] = merged
             item["current"] = normalize_trcf_value(item.get("current"))
 
@@ -2915,7 +3164,10 @@ class DashboardService:
                     "key": item["key"],
                     "label": item["label"],
                     "id": int(field_id) if is_valid_trcf_id(field_id) else None,
-                    "options": live.get("options") or item.get("options") or [],
+                    "options": sorted(
+                        live.get("options") or item.get("options") or [],
+                        key=lambda s: str(s).lower(),
+                    ),
                     "current": live.get("current") or "",
                 }
             )
@@ -3173,7 +3425,16 @@ class DashboardService:
                 "labels",
                 "fixVersions",
             ]
-            for fid in ("test_plan", "test_environments", "stack_name", "feature_name", "tech_area"):
+            for fid in (
+                "test_plan",
+                "test_environments",
+                "stack_name",
+                "feature_name",
+                "tech_area",
+                "sdk_build_num",
+                "release_name",
+                "jenkins_url",
+            ):
                 mapped = field_map.get(fid)
                 if mapped:
                     exec_field_list.append(mapped)
@@ -3251,6 +3512,9 @@ class DashboardService:
                     exec_fields, field_map.get("test_environments")
                 ),
                 "stack_name": self._extract_field(exec_fields, field_map.get("stack_name")),
+                "sdk_build_num": self._extract_field(exec_fields, field_map.get("sdk_build_num")),
+                "release_name": self._extract_field(exec_fields, field_map.get("release_name")),
+                "jenkins_url": self._extract_field(exec_fields, field_map.get("jenkins_url")),
                 "feature_name": self._extract_field(exec_fields, field_map.get("feature_name")),
                 "tech_area": self._extract_field(exec_fields, field_map.get("tech_area")),
             },
@@ -3704,15 +3968,17 @@ class DashboardService:
         tests: list[dict[str, Any]] = []
         total = 0
         jql = ""
+        id_lookup = self._is_case_id_query(search)
         # Folder browse uses Xray JQL:
         # issue in TestRepositoryFolderTests(PROJ,'folder/path','true') AND Technology = "…"
+        # A case/map id search looks across the project so the folder filter cannot hide it.
         if selected or search.strip():
             tests, total, jql = self._repository_tests_from_jql(
                 project=project,
                 issue_type=issue_type,
-                selected=selected,
+                selected="" if id_lookup else selected,
                 search=search,
-                technology=technology,
+                technology="" if id_lookup else technology,
                 field_map=field_map,
                 page=page,
                 page_size=page_size,
@@ -3742,6 +4008,7 @@ class DashboardService:
             "folder_source": source,
             "crumbs": crumbs,
             "technology": technology,
+            "id_lookup": id_lookup,
             "filters": {
                 "search": search,
                 "technology": technology,
@@ -4015,6 +4282,9 @@ class DashboardService:
     ) -> tuple[list[dict[str, Any]], int, str]:
         import re
 
+        raw = search.strip()
+        safe = raw.replace('"', '\\"')
+        id_lookup = self._is_case_id_query(raw)
         clauses: list[str] = []
         if selected:
             clauses.append(self._test_repository_folder_jql(project, selected))
@@ -4022,38 +4292,78 @@ class DashboardService:
             clauses.append(f"project = {project}")
             clauses.append(f'issuetype = "{issue_type}"')
         if technology:
-            safe = technology.replace('"', '\\"')
-            clauses.append(f'Technology = "{safe}"')
-        if search.strip():
-            safe = search.replace('"', '\\"')
-            if re.match(r"^[A-Z][A-Z0-9_]+-\d+$", safe, re.I):
-                clauses.append(f'key = "{safe.upper()}"')
-            else:
-                clauses.append(f'summary ~ "{safe}"')
-        jql = " AND ".join(clauses) + " ORDER BY key ASC"
+            tech = technology.replace('"', '\\"')
+            clauses.append(f'Technology = "{tech}"')
+
+        jql_variants: list[str] = []
+        if id_lookup:
+            cf_nums = []
+            for key_name in ("case_id", "test_src_map_id"):
+                fid = (field_map.get(key_name) or "").strip()
+                if fid.startswith("customfield_"):
+                    cf_nums.append(fid.replace("customfield_", ""))
+            needles = [safe]
+            if re.match(r"^C\d+$", raw, re.I):
+                needles.append(raw[1:])
+            elif raw.isdigit():
+                needles.append(f"C{raw}")
+            # Text fields support either ~ or =, depending on the Jira searcher.
+            for operator in ("~", "="):
+                parts = [
+                    f'cf[{num}] {operator} "{needle}"'
+                    for num in cf_nums
+                    for needle in needles
+                ]
+                if parts:
+                    jql_variants.append(
+                        " AND ".join(clauses + ["(" + " OR ".join(parts) + ")"])
+                        + " ORDER BY key ASC"
+                    )
+        elif raw and re.match(r"^[A-Z][A-Z0-9_]+-\d+$", safe, re.I):
+            clauses.append(f'key = "{safe.upper()}"')
+            jql_variants.append(" AND ".join(clauses) + " ORDER BY key ASC")
+        elif raw:
+            id_parts = [f'summary ~ "{safe}"']
+            for key_name in ("case_id", "test_src_map_id"):
+                fid = (field_map.get(key_name) or "").strip()
+                if fid.startswith("customfield_"):
+                    cf_num = fid.replace("customfield_", "")
+                    id_parts.append(f'cf[{cf_num}] ~ "{safe}"')
+            jql_variants.append(
+                " AND ".join(clauses + ["(" + " OR ".join(id_parts) + ")"])
+                + " ORDER BY key ASC"
+            )
+            jql_variants.append(
+                " AND ".join(clauses + [f'summary ~ "{safe}"']) + " ORDER BY key ASC"
+            )
+        else:
+            jql_variants.append(" AND ".join(clauses) + " ORDER BY key ASC")
+
         fields = [
             "summary",
             "status",
             "labels",
         ]
-        path_fid = field_map.get("test_repo_path")
-        if path_fid and path_fid not in fields:
-            fields.append(path_fid)
+        for key_name in ("test_repo_path", "case_id", "test_src_map_id"):
+            fid = field_map.get(key_name)
+            if fid and fid not in fields:
+                fields.append(fid)
         start_at = (page - 1) * page_size
-        try:
-            data = self.jira.search(
-                jql=jql, fields=fields, max_results=page_size, start_at=start_at
-            )
-        except JiraError:
-            alt = jql.replace(
-                "TestRepositoryFolderTests", "testRepositoryFolderTests", 1
-            )
-            if alt == jql:
-                raise
-            jql = alt
-            data = self.jira.search(
-                jql=jql, fields=fields, max_results=page_size, start_at=start_at
-            )
+        data: dict[str, Any] | None = None
+        jql = jql_variants[0]
+        last_error: JiraError | None = None
+        for candidate in jql_variants:
+            try:
+                data, jql = self._search_repository_jql(
+                    candidate, fields, page_size, start_at
+                )
+            except JiraError as exc:
+                last_error = exc
+                continue
+            if int(data.get("total") or 0) > 0 or not id_lookup:
+                break
+        if data is None:
+            raise last_error or JiraError("Repository search failed")
         issues = data.get("issues") or []
         total = int(data.get("total") or len(issues))
         tests = []
@@ -4069,6 +4379,7 @@ class DashboardService:
                     "labels": f.get("labels") or [],
                     "section_path": self._extract_field(f, field_map.get("test_repo_path"))
                     or self._path_from_labels(f.get("labels") or []),
+                    "case_id": self._extract_field(f, field_map.get("case_id")),
                     "test_src_map_id": self._extract_field(
                         f, field_map.get("test_src_map_id")
                     ),
@@ -4076,6 +4387,39 @@ class DashboardService:
                 }
             )
         return tests, total, jql
+
+    @staticmethod
+    def _is_case_id_query(search: str) -> bool:
+        import re
+
+        return bool(re.match(r"^(?:C)?\d+$", (search or "").strip(), re.I))
+
+    def _search_repository_jql(
+        self,
+        jql: str,
+        fields: list[str],
+        page_size: int,
+        start_at: int,
+    ) -> tuple[dict[str, Any], str]:
+        try:
+            return (
+                self.jira.search(
+                    jql=jql, fields=fields, max_results=page_size, start_at=start_at
+                ),
+                jql,
+            )
+        except JiraError:
+            alt = jql.replace(
+                "TestRepositoryFolderTests", "testRepositoryFolderTests", 1
+            )
+            if alt == jql:
+                raise
+            return (
+                self.jira.search(
+                    jql=alt, fields=fields, max_results=page_size, start_at=start_at
+                ),
+                alt,
+            )
 
     @staticmethod
     def _normalize_test_steps(raw: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -5996,9 +6340,20 @@ class DashboardService:
             idx, item = pair
             run_id = item.get("id") or item.get("testRunId")
             try:
-                return idx, self.xray.get_test_run_assignee(run_id)
+                user = self.xray.get_test_run_assignee(run_id)
+            except JiraError:
+                user = None
+            if user:
+                return idx, user
+            try:
+                run = self.xray.get_test_run(run_id)
             except JiraError:
                 return idx, None
+            if isinstance(run, dict):
+                for key in ("assignee", "assignedTo", "assigned_to"):
+                    if run.get(key):
+                        return idx, run.get(key)
+            return idx, None
 
         with ThreadPoolExecutor(max_workers=10) as pool:
             futures = [pool.submit(_one, pair) for pair in need]
@@ -6014,14 +6369,7 @@ class DashboardService:
         """Return (displayName, userKey) for a Test Run assignee payload."""
         if not isinstance(item, dict):
             return "", ""
-        for key in (
-            "assignee",
-            "assignedTo",
-            "assigned_to",
-            "user",
-            "testedBy",
-            "executor",
-        ):
+        for key in ("assignee", "assignedTo", "assigned_to"):
             raw = item.get(key)
             display = cls._user_name(raw)
             user_key = cls._user_key(raw)
@@ -6029,7 +6377,7 @@ class DashboardService:
                 return display or user_key, user_key or display
         nested = item.get("test") if isinstance(item.get("test"), dict) else None
         if nested:
-            for key in ("assignee", "assignedTo", "user"):
+            for key in ("assignee", "assignedTo", "assigned_to"):
                 raw = nested.get(key)
                 display = cls._user_name(raw)
                 user_key = cls._user_key(raw)

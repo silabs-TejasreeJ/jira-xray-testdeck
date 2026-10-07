@@ -625,8 +625,22 @@ class XrayClient:
 
     def get_test_run(self, test_run_id: int | str) -> dict[str, Any]:
         run_id = quote(str(test_run_id))
-        data = self.jira.get(f"/rest/raven/1.0/api/testrun/{run_id}")
-        return data if isinstance(data, dict) else {}
+        last_error: Exception | None = None
+        for path in (
+            f"/rest/raven/1.0/api/testrun/{run_id}",
+            f"/rest/raven/2.0/api/testrun/{run_id}",
+        ):
+            try:
+                data = self.jira.get(path)
+            except JiraError as exc:
+                last_error = exc
+                if exc.status_code in {401, 403}:
+                    raise
+                continue
+            return data if isinstance(data, dict) else {}
+        if last_error:
+            raise last_error
+        return {}
 
     def get_test_steps(self, test_key: str) -> list[dict[str, Any]]:
         """Return manual test steps for an Xray Test (Action / Data / Expected Result)."""
@@ -930,12 +944,22 @@ class XrayClient:
         paths.extend(
             [
                 "/rest/raven/1.0/api/settings/testrun/customfields",
+                "/rest/raven/2.0/api/settings/testrun/customfields",
                 "/rest/raven/1.0/api/settings/testRunCustomFields",
                 "/rest/raven/1.0/api/settings/customfields/testruns",
+                "/rest/raven/2.0/api/settings/customfields/testruns",
                 "/rest/raven/1.0/settings/testrun/customfields",
                 "/rest/raven/1.0/api/testruncustomfields",
+                "/rest/raven/2.0/api/testruncustomfields",
             ]
         )
+
+        def _option_count(field: dict[str, Any]) -> int:
+            for key_name in ("values", "options", "allowedValues"):
+                raw = field.get(key_name)
+                if isinstance(raw, list) and raw:
+                    return len(raw)
+            return 0
 
         def _parse_fields(data: Any) -> list[dict[str, Any]]:
             if isinstance(data, list):
@@ -943,13 +967,21 @@ class XrayClient:
             if isinstance(data, dict):
                 for key_name in (
                     "fields",
-                    "values",
                     "data",
                     "customFields",
                     "testRunCustomFields",
+                    "testRunCustomField",
                 ):
                     if isinstance(data.get(key_name), list):
                         return [x for x in data[key_name] if isinstance(x, dict)]
+                # "values" on a field list payload is options, not the field array.
+                if any(
+                    isinstance(data.get(k), list) and data.get(k) and isinstance(data[k][0], dict)
+                    for k in ("values",)
+                ):
+                    first = data["values"][0]
+                    if first.get("name") or first.get("id") or first.get("type"):
+                        return [x for x in data["values"] if isinstance(x, dict)]
                 from .testrun_fields import extract_named_ids
 
                 return extract_named_ids(data)
@@ -963,11 +995,11 @@ class XrayClient:
             except JiraError as exc:
                 return path, [], exc.status_code, False
 
-        # Probe most likely endpoints first, in parallel batches, stop early.
         preferred = [p for p in paths if "/settings/customfields/testruns" in p.lower()]
         remaining = [p for p in paths if p not in preferred]
         ordered = preferred + remaining
         probe_log: list[dict[str, Any]] = []
+        merged: dict[str, dict[str, Any]] = {}
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         batch_size = 6
@@ -983,8 +1015,14 @@ class XrayClient:
                             "status": status,
                             "ok": ok,
                             "count": len(fields),
+                            "options": sum(_option_count(f) for f in fields),
                         }
                     )
-                    if fields:
-                        return fields, probe_log
-        return [], probe_log
+                    for field in fields:
+                        name = str(field.get("name") or field.get("label") or "").strip()
+                        field_id = field.get("customFieldId") or field.get("id")
+                        key = f"{field_id}:{name.lower()}"
+                        prev = merged.get(key)
+                        if prev is None or _option_count(field) > _option_count(prev):
+                            merged[key] = field
+        return list(merged.values()), probe_log

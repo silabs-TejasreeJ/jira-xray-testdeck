@@ -41,6 +41,8 @@
         <div><div class="label">Test Plan</div>{{ execution.test_plan|default:"—" }}</div>
         <div><div class="label">Environments</div>{{ execution.environments|default:"—" }}</div>
         <div><div class="label">Fix Versions</div>{{ execution.fixversions|join:", "|default:"—" }}</div>
+        <div><div class="label">SDK build</div>{{ execution.sdk_build_num|default:"—" }}</div>
+        <div><div class="label">Release</div>{{ execution.release_name|default:"—" }}</div>
         <div><div class="label">Feature</div>{{ execution.feature_name|default:"—" }}</div>
         <div><div class="label">Tech Area</div>{{ execution.tech_area|default:"—" }}</div>
       </div>
