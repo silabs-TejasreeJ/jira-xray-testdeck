@@ -51,10 +51,7 @@ SEED_OPTIONS: dict[str, list[str]] = {
         "SoC",
         "SOC",
     ],
-    "build_version": [
-        "wifi_sdk-4.1.1-CF(SiWG917-B.2.16.5.1.0.6)",
-        "wifi_sdk-4.1.1-CF(SIWG917-B.2.16.5.1.0.6)",
-    ],
+    "build_version": [],
     "interface_type": [
         "SPI",
         "SDIO",
@@ -115,7 +112,7 @@ def match_field_key(name: str) -> str:
     return ""
 
 
-def empty_field_catalog() -> list[dict[str, Any]]:
+def empty_field_catalog(*, include_seeds: bool = False) -> list[dict[str, Any]]:
     catalog = []
     for item in TEST_RUN_CUSTOM_FIELDS:
         catalog.append(
@@ -123,7 +120,7 @@ def empty_field_catalog() -> list[dict[str, Any]]:
                 "key": item["key"],
                 "label": item["label"],
                 "id": None,
-                "options": list(SEED_OPTIONS.get(item["key"]) or []),
+                "options": list(SEED_OPTIONS.get(item["key"]) or []) if include_seeds else [],
                 "current": "",
             }
         )

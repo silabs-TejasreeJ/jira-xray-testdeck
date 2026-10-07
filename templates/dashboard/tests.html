@@ -35,7 +35,7 @@
         {% include "dashboard/_technology_select.html" with selected_technology=technology select_id="repoTechnology" select_class="" placeholder="All technologies" native=1 %}
         {% if section_path %}<input type="hidden" name="folder" value="{{ section_path }}">{% endif %}
         {% if folder_id %}<input type="hidden" name="folder_id" value="{{ folder_id }}">{% endif %}
-        <input type="search" name="search" value="{{ search }}" placeholder="Search key or summary">
+        <input type="search" name="search" value="{{ search }}" placeholder="Case / map id, key, or summary">
         <button class="btn btn-primary" type="submit">Search</button>
         {% if search or section_path or technology %}
           <a class="btn" href="{% url 'tests' %}?project={{ project_key|urlencode }}">Clear</a>
@@ -56,7 +56,9 @@
       </nav>
 
       <div class="small muted" style="margin:8px 0 12px;">
-        {% if section_path %}
+        {% if id_lookup %}
+          Case / map id <strong>{{ search }}</strong> — {{ count }} of {{ total }} match{{ total|pluralize }} in {{ project_key }}
+        {% elif section_path %}
           Showing {{ count }} of {{ total }} test{{ total|pluralize }} in this folder
           {% if technology %} · Technology <strong>{{ technology }}</strong>{% endif %}
         {% else %}
@@ -77,6 +79,7 @@
             <tr>
               <th>Status</th>
               <th>Key</th>
+              <th>Case / map id</th>
               <th>Summary</th>
               <th>Labels</th>
               <th></th>
@@ -90,6 +93,13 @@
                 </td>
                 <td class="nowrap">
                   <a href="{% url 'test_detail' test.key %}?folder={{ section_path|urlencode }}&project={{ project_key|urlencode }}{% if technology %}&technology={{ technology|urlencode }}{% endif %}">{{ test.key }}</a>
+                </td>
+                <td class="nowrap small">
+                  {% if test.case_id %}{{ test.case_id }}{% endif %}
+                  {% if test.test_src_map_id and test.test_src_map_id != test.case_id %}
+                    {% if test.case_id %}<div class="muted">{{ test.test_src_map_id }}</div>{% else %}{{ test.test_src_map_id }}{% endif %}
+                  {% endif %}
+                  {% if not test.case_id and not test.test_src_map_id %}—{% endif %}
                 </td>
                 <td>{{ test.summary }}</td>
                 <td class="small">
@@ -105,8 +115,8 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="5" class="muted">
-                  {% if section_path or search %}No tests in this folder / search.{% else %}Choose a folder to view tests.{% endif %}
+                <td colspan="6" class="muted">
+                  {% if id_lookup %}No test with case / map id {{ search }}.{% elif section_path or search %}No tests in this folder / search.{% else %}Choose a folder to view tests.{% endif %}
                 </td>
               </tr>
             {% endfor %}
